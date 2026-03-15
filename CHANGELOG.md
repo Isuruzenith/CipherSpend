@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.2.0](https://github.com/Isuruzenith/CipherSpend/compare/v0.1.0...v0.2.0) (2026-03-15)
+
+
+### Features
+
+* Update documentation, add Docker support, and upgrade TenSEAL v… ([6e5c4dd](https://github.com/Isuruzenith/CipherSpend/commit/6e5c4dd35bbdd2ebf8720fb02a20deb71b59d02b))
+* Update documentation, add Docker support, and upgrade TenSEAL version ([110702d](https://github.com/Isuruzenith/CipherSpend/commit/110702d15900517f24d206d0d5898b8c95c992ea))
+
 ## 0.1.0 (2026-03-15)
 
 
