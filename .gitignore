@@ -1,0 +1,9 @@
+# CipherSpend — never commit keys or encrypted data
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
