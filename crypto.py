@@ -6,6 +6,12 @@ Summation is performed homomorphically on ciphertexts; only the
 final aggregate is decrypted.
 """
 import base64
+import json
+import os
+
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 import tenseal as ts
 
 # ── CKKS parameters ──────────────────────────────────────────────────────────
@@ -15,6 +21,10 @@ import tenseal as ts
 _POLY_MOD_DEGREE = 8192
 _COEFF_MOD_BITS  = [60, 40, 40, 60]
 _SCALE           = 2 ** 40
+_PBKDF2_ITERS    = 600_000
+_AES_KEY_LEN     = 32
+_SALT_LEN        = 16
+_NONCE_LEN       = 12
 
 
 def create_context() -> ts.Context:
@@ -62,6 +72,30 @@ def decrypt_sum(ctx: ts.Context, ciphertext_bytes_list: list[bytes]) -> float:
     return total.decrypt()[0]
 
 
+def decrypt_sum_with_health(
+    ctx: ts.Context,
+    ciphertext_bytes_list: list[bytes],
+    drift_threshold: float = 0.005,
+    refresh_term_threshold: int = 200,
+) -> tuple[float, float, bool]:
+    """
+    Decrypt homomorphic sum and optionally refresh aggregate ciphertext if
+    precision drift or operand count crosses threshold.
+    """
+    if not ciphertext_bytes_list:
+        return 0.0, 0.0, False
+
+    raw_total = decrypt_sum(ctx, ciphertext_bytes_list)
+    drift = abs(raw_total - round(raw_total, 2))
+    should_refresh = drift > drift_threshold or len(ciphertext_bytes_list) >= refresh_term_threshold
+    if not should_refresh:
+        return raw_total, drift, False
+
+    refreshed_ct = encrypt_amount(ctx, raw_total)
+    refreshed_total = ts.ckks_vector_from(ctx, refreshed_ct).decrypt()[0]
+    return refreshed_total, drift, True
+
+
 def ciphertext_to_display(ciphertext_bytes: bytes, max_chars: int = 36) -> str:
     """
     Return a display-safe, truncated base64 representation of a ciphertext,
@@ -71,3 +105,55 @@ def ciphertext_to_display(ciphertext_bytes: bytes, max_chars: int = 36) -> str:
     if len(b64) > max_chars:
         return b64[:max_chars] + "…"
     return b64
+
+
+def _derive_kek(passphrase: str, salt: bytes, iterations: int = _PBKDF2_ITERS) -> bytes:
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=_AES_KEY_LEN,
+        salt=salt,
+        iterations=iterations,
+    )
+    return kdf.derive(passphrase.encode("utf-8"))
+
+
+def encrypt_key_material(key_bytes: bytes, passphrase: str) -> bytes:
+    """Encrypt serialized TenSEAL context bytes for at-rest storage."""
+    salt = os.urandom(_SALT_LEN)
+    nonce = os.urandom(_NONCE_LEN)
+    kek = _derive_kek(passphrase, salt)
+    ciphertext = AESGCM(kek).encrypt(nonce, key_bytes, None)
+    envelope = {
+        "version": 1,
+        "kdf": "pbkdf2-hmac-sha256",
+        "iterations": _PBKDF2_ITERS,
+        "salt_b64": base64.b64encode(salt).decode("ascii"),
+        "nonce_b64": base64.b64encode(nonce).decode("ascii"),
+        "ciphertext_b64": base64.b64encode(ciphertext).decode("ascii"),
+    }
+    return json.dumps(envelope, separators=(",", ":")).encode("utf-8")
+
+
+def decrypt_key_material(envelope_bytes: bytes, passphrase: str) -> bytes:
+    """Decrypt an encrypted key envelope produced by encrypt_key_material()."""
+    envelope = json.loads(envelope_bytes.decode("utf-8"))
+    iterations = int(envelope["iterations"])
+    salt = base64.b64decode(envelope["salt_b64"])
+    nonce = base64.b64decode(envelope["nonce_b64"])
+    ciphertext = base64.b64decode(envelope["ciphertext_b64"])
+    kek = _derive_kek(passphrase, salt, iterations=iterations)
+    return AESGCM(kek).decrypt(nonce, ciphertext, None)
+
+
+def is_valid_key_envelope(envelope_bytes: bytes) -> bool:
+    try:
+        envelope = json.loads(envelope_bytes.decode("utf-8"))
+        required = {"version", "kdf", "iterations", "salt_b64", "nonce_b64", "ciphertext_b64"}
+        if not required.issubset(envelope.keys()):
+            return False
+        base64.b64decode(envelope["salt_b64"])
+        base64.b64decode(envelope["nonce_b64"])
+        base64.b64decode(envelope["ciphertext_b64"])
+        return True
+    except (ValueError, KeyError, TypeError, json.JSONDecodeError):
+        return False

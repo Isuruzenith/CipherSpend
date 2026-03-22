@@ -9,8 +9,8 @@ Run with:  streamlit run app.py
 import hashlib
 import os
 import uuid
-from datetime import datetime, date
-from html import escape
+from datetime import datetime, date, timezone, timedelta
+from pathlib import Path
 
 import streamlit as st
 
@@ -79,31 +79,16 @@ st.markdown(
   /* Divider */
   .cs-divider { border: none; border-top: 1px solid #1e1e1e; margin: 1.5rem 0; }
 
-  /* Expense table */
-  .cs-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-family: system-ui, -apple-system, sans-serif;
-    font-size: 14px;
-    color: #ccc;
-    margin: 0.5rem 0 1.5rem;
+  /* Responsive columns */
+  @media (max-width: 650px) {
+    div[data-testid="stHorizontalBlock"] {
+      flex-wrap: wrap !important;
+    }
+    div[data-testid="stHorizontalBlock"] > div[data-testid="column"] {
+      min-width: 100% !important;
+      margin-bottom: 0.5rem;
+    }
   }
-  .cs-table th {
-    text-align: left;
-    padding: 7px 10px;
-    border-bottom: 1px solid #242424;
-    color: #555;
-    font-weight: 500;
-    font-size: 11px;
-    text-transform: uppercase;
-    letter-spacing: 0.06em;
-  }
-  .cs-table td {
-    padding: 10px 10px;
-    border-bottom: 1px solid #161616;
-    vertical-align: middle;
-  }
-  .cs-table tr:hover td { background: #0f0f0f; }
 
   /* Encrypted value badge */
   .cipher-val {
@@ -112,15 +97,17 @@ st.markdown(
     font-size: 11px;
     background: #141a14;
     color: #5a9a70;
-    padding: 3px 8px;
+    padding: 6px 10px;
     border-radius: 4px;
     border: 1px solid #1e2e1e;
-    max-width: 260px;
+    width: 100%;
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
     cursor: default;
     letter-spacing: 0.03em;
+    box-sizing: border-box;
   }
 
   /* Total display */
@@ -178,12 +165,25 @@ try:
     from crypto import (
         create_context,
         ciphertext_to_display,
-        decrypt_sum,
+        decrypt_key_material,
+        decrypt_sum_with_health,
+        encrypt_key_material,
         encrypt_amount,
+        is_valid_key_envelope,
         load_context,
         serialize_context,
     )
-    from db import delete_expense, get_expenses, init_db, save_expense
+    from db import (
+        delete_expense,
+        export_ledger_sql_dump,
+        get_distinct_categories,
+        get_expenses,
+        get_expenses_filtered,
+        init_db,
+        is_valid_ledger_bytes,
+        restore_ledger_file_from_bytes,
+        save_expense,
+    )
 except ImportError as exc:
     st.error(f"Missing dependency: {exc}\n\nRun: `pip install -r requirements.txt`")
     st.stop()
@@ -191,9 +191,12 @@ except ImportError as exc:
 # ── Paths ─────────────────────────────────────────────────────────────────────
 _APP_DIR  = os.path.dirname(os.path.abspath(__file__))
 _DATA_DIR = os.path.join(_APP_DIR, "data")
-_KEY_PATH = os.path.join(_DATA_DIR, "secret.key")
+_KEY_PATH = os.path.join(_DATA_DIR, "secret.key.enc")
+_LEGACY_KEY_PATH = os.path.join(_DATA_DIR, "secret.key")
 _DB_PATH  = os.path.join(_DATA_DIR, "expenses.db")
 os.makedirs(_DATA_DIR, exist_ok=True)
+_CATEGORY_OPTIONS = ["Groceries", "Utilities", "Entertainment", "Transport", "Health", "Other"]
+_LOCAL_TZ = timezone(timedelta(hours=5, minutes=30))
 
 # ── Session state defaults ────────────────────────────────────────────────────
 if "ctx" not in st.session_state:
@@ -204,6 +207,18 @@ if "conn" not in st.session_state:
     st.session_state.conn = None
 if "total_result" not in st.session_state:
     st.session_state.total_result = None  # (value, count, filtered_range)
+if "first_backup_ack" not in st.session_state:
+    st.session_state.first_backup_ack = False
+if "restore_key_bytes" not in st.session_state:
+    st.session_state.restore_key_bytes = None
+if "restore_ledger_bytes" not in st.session_state:
+    st.session_state.restore_ledger_bytes = None
+if "passphrase" not in st.session_state:
+    st.session_state.passphrase = None
+if "needs_passphrase_setup" not in st.session_state:
+    st.session_state.needs_passphrase_setup = False
+if "legacy_key_found" not in st.session_state:
+    st.session_state.legacy_key_found = False
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown('<p class="cs-title">CipherSpend</p>', unsafe_allow_html=True)
@@ -215,31 +230,189 @@ st.markdown(
 )
 
 # ── Key management ────────────────────────────────────────────────────────────
-def _load_or_create_key() -> None:
-    if os.path.exists(_KEY_PATH):
-        with open(_KEY_PATH, "rb") as f:
-            ctx_bytes = f.read()
-        st.session_state.ctx = load_context(ctx_bytes)
+def _refresh_local_state_from_disk() -> None:
+    """
+    Ensure app state reconnects to local files if they exist after a rerun/restart.
+    """
+    if st.session_state.conn is None:
+        st.session_state.conn = init_db(_DB_PATH)
+
+
+def _to_local_display_time(ts_iso: str) -> str:
+    dt = datetime.fromisoformat(ts_iso)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=_LOCAL_TZ)
     else:
-        ctx = create_context()
-        ctx_bytes = serialize_context(ctx, include_sk=True)
+        dt = dt.astimezone(_LOCAL_TZ)
+    return dt.strftime("%Y-%m-%d %H:%M:%S GMT+05:30")
+
+
+def _compute_total_for_filters(
+    conn,
+    ctx,
+    date_range_value,
+    category_value: str,
+) -> tuple[float | None, int, str, float, bool]:
+    start_iso = None
+    end_iso = None
+    range_label = "all expenses"
+    if isinstance(date_range_value, (list, tuple)) and len(date_range_value) == 2:
+        start_dt: date = date_range_value[0]
+        end_dt: date = date_range_value[1]
+        start_iso = f"{start_dt.isoformat()}T00:00:00"
+        end_iso = f"{end_dt.isoformat()}T23:59:59.999999"
+        range_label = f"{start_dt.strftime('%b %d')} – {end_dt.strftime('%b %d, %Y')}"
+
+    filtered = get_expenses_filtered(
+        conn,
+        start_iso=start_iso,
+        end_iso=end_iso,
+        category=category_value,
+    )
+    if category_value != "All":
+        range_label = f"{range_label} · {category_value}"
+
+    if not filtered:
+        return None, 0, range_label, 0.0, False
+
+    total_val, drift, refreshed = decrypt_sum_with_health(
+        ctx, [e["ciphertext"] for e in filtered]
+    )
+    return total_val, len(filtered), range_label, drift, refreshed
+
+
+def _apply_restore_payloads() -> None:
+    if st.session_state.restore_key_bytes is None and st.session_state.restore_ledger_bytes is None:
+        return
+
+    if st.session_state.restore_key_bytes is not None:
+        if st.session_state.passphrase is None:
+            raise ValueError("Passphrase required to restore key.")
+        key_bytes = decrypt_key_material(
+            st.session_state.restore_key_bytes, st.session_state.passphrase
+        )
+        new_ctx = load_context(key_bytes)
         with open(_KEY_PATH, "wb") as f:
-            f.write(ctx_bytes)
-        st.session_state.ctx = ctx
-        st.session_state.key_just_created = True
+            f.write(st.session_state.restore_key_bytes)
+        st.session_state.ctx = new_ctx
+
+    if st.session_state.restore_ledger_bytes is not None:
+        if st.session_state.conn is not None:
+            st.session_state.conn.close()
+        restore_ledger_file_from_bytes(st.session_state.restore_ledger_bytes, _DB_PATH)
+        st.session_state.conn = None
+
+    st.session_state.restore_key_bytes = None
+    st.session_state.restore_ledger_bytes = None
+    st.session_state.total_result = None
+
+
+def _load_or_create_key() -> None:
+    st.session_state.needs_passphrase_setup = not os.path.exists(_KEY_PATH)
+    st.session_state.legacy_key_found = (
+        st.session_state.needs_passphrase_setup and os.path.exists(_LEGACY_KEY_PATH)
+    )
+
+
+def _unlock_or_setup_key() -> None:
+    if st.session_state.needs_passphrase_setup:
+        st.markdown(
+            '<div class="cs-warn">⚠ Set a passphrase to protect your local encryption key at rest.</div>',
+            unsafe_allow_html=True,
+        )
+        if st.session_state.legacy_key_found:
+            st.caption(
+                "Legacy key detected (`data/secret.key`). It will be wrapped into encrypted storage."
+            )
+        p1 = st.text_input(
+            "Create passphrase",
+            type="password",
+            placeholder="Create passphrase",
+            label_visibility="collapsed",
+            key="passphrase_input_create",
+        )
+        p2 = st.text_input(
+            "Confirm passphrase",
+            type="password",
+            placeholder="Confirm passphrase",
+            label_visibility="collapsed",
+            key="passphrase_input_confirm",
+        )
+        if st.button("Create Encrypted Key", use_container_width=True, key="create_key_btn"):
+            if not p1 or len(p1) < 10:
+                st.warning("Use a passphrase with at least 10 characters.")
+            elif p1 != p2:
+                st.warning("Passphrases do not match.")
+            else:
+                if st.session_state.legacy_key_found:
+                    with open(_LEGACY_KEY_PATH, "rb") as f:
+                        raw_key = f.read()
+                    ctx = load_context(raw_key)
+                else:
+                    ctx = create_context()
+                    raw_key = serialize_context(ctx, include_sk=True)
+                enc_key = encrypt_key_material(raw_key, p1)
+                with open(_KEY_PATH, "wb") as f:
+                    f.write(enc_key)
+                if os.path.exists(_LEGACY_KEY_PATH):
+                    os.remove(_LEGACY_KEY_PATH)
+                st.session_state.passphrase = p1
+                st.session_state.ctx = ctx
+                st.session_state.key_just_created = True
+                st.session_state.needs_passphrase_setup = False
+                st.session_state.legacy_key_found = False
+                st.rerun()
+        st.stop()
+
+    if st.session_state.passphrase is None:
+        st.markdown(
+            '<div class="cs-warn">🔒 Enter your passphrase to unlock your local key.</div>',
+            unsafe_allow_html=True,
+        )
+        passphrase = st.text_input(
+            "Passphrase",
+            type="password",
+            placeholder="Enter passphrase",
+            label_visibility="collapsed",
+            key="passphrase_input_unlock",
+        )
+        if st.button("Unlock", use_container_width=True, key="unlock_btn"):
+            if not passphrase:
+                st.warning("Passphrase is required.")
+            else:
+                st.session_state.passphrase = passphrase
+                st.rerun()
+        st.stop()
+
+    if st.session_state.ctx is None:
+        with open(_KEY_PATH, "rb") as f:
+            envelope = f.read()
+        if not is_valid_key_envelope(envelope):
+            st.error("Encrypted key file format is invalid.")
+            st.stop()
+        try:
+            key_bytes = decrypt_key_material(envelope, st.session_state.passphrase)
+            st.session_state.ctx = load_context(key_bytes)
+        except Exception:
+            st.error("Failed to unlock key. Check your passphrase.")
+            st.session_state.passphrase = None
+            st.stop()
 
 
 if st.session_state.ctx is None:
     with st.spinner("Initializing encryption context…"):
         _load_or_create_key()
 
+_unlock_or_setup_key()
+_refresh_local_state_from_disk()
+
 ctx = st.session_state.ctx
 
 if st.session_state.key_just_created:
     st.markdown(
         '<div class="cs-warn">'
-        "⚠ New encryption key generated and saved to <code>data/secret.key</code>. "
-        "Back it up now — losing it makes all encrypted data irrecoverable."
+        "⚠ New encryption key generated and saved to <code>data/secret.key.enc</code>. "
+        "Download your backup now — losing it makes all encrypted data irrecoverable."
         "</div>",
         unsafe_allow_html=True,
     )
@@ -248,12 +421,19 @@ if st.session_state.key_just_created:
     st.download_button(
         "⬇ Download Key Backup",
         data=_key_bytes,
-        file_name="cipherspend_secret.key",
+        file_name="cipherspend_secret.key.enc",
         mime="application/octet-stream",
         key="dl_key_new",
     )
-    if st.button("I've saved my key backup — continue"):
+    st.caption("Required before continuing: save this file somewhere safe.")
+    st.session_state.first_backup_ack = st.checkbox(
+        "I downloaded and safely stored my key backup.",
+        value=st.session_state.first_backup_ack,
+        key="first_backup_checkbox",
+    )
+    if st.button("Continue to app", disabled=not st.session_state.first_backup_ack):
         st.session_state.key_just_created = False
+        st.session_state.first_backup_ack = False
         st.rerun()
 else:
     with open(_KEY_PATH, "rb") as f:
@@ -273,7 +453,7 @@ conn = st.session_state.conn
 st.markdown('<hr class="cs-divider">', unsafe_allow_html=True)
 
 with st.form("add_expense", clear_on_submit=True):
-    col1, col2, col3 = st.columns([3, 2, 1])
+    col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
     with col1:
         desc = st.text_input(
             "Description",
@@ -291,6 +471,13 @@ with st.form("add_expense", clear_on_submit=True):
             label_visibility="collapsed",
         )
     with col3:
+        category = st.selectbox(
+            "Category",
+            _CATEGORY_OPTIONS,
+            index=0,
+            label_visibility="collapsed",
+        )
+    with col4:
         submitted = st.form_submit_button("Add", use_container_width=True)
 
 if submitted:
@@ -307,6 +494,7 @@ if submitted:
             description=desc.strip(),
             timestamp=datetime.now().isoformat(),
             ciphertext=ct_bytes,
+            category=category,
         )
         st.session_state.total_result = None  # invalidate cached total
         st.rerun()
@@ -320,82 +508,84 @@ if not expenses:
         unsafe_allow_html=True,
     )
 else:
-    rows_html = ""
-    for i, exp in enumerate(expenses, 1):
-        dt       = datetime.fromisoformat(exp["timestamp"])
-        date_str = dt.strftime("%b %d, %Y")
-        ct_disp  = ciphertext_to_display(exp["ciphertext"])
-        desc_safe = escape(exp["description"])
-        rows_html += (
-            f"<tr>"
-            f'<td style="color:#3a3a3a;">{i}</td>'
-            f"<td>{desc_safe}</td>"
-            f'<td style="color:#555;">{date_str}</td>'
-            f'<td><span class="cipher-val" '
-            f'title="This is an encrypted amount — only you can decrypt it.">'
-            f"{ct_disp}</span></td>"
-            f"</tr>"
-        )
-
-    st.markdown(
-        f"""
-<table class="cs-table">
-  <thead>
-    <tr>
-      <th style="width:40px;">#</th>
-      <th>Description</th>
-      <th style="width:110px;">Date</th>
-      <th>Encrypted Amount</th>
-    </tr>
-  </thead>
-  <tbody>{rows_html}</tbody>
-</table>""",
-        unsafe_allow_html=True,
-    )
+    st.markdown('<p class="cs-total-label" style="margin:0; padding-bottom: 0.5rem;">Ledger List</p>', unsafe_allow_html=True)
+    st.markdown('<hr class="cs-divider" style="margin-top: 0;">', unsafe_allow_html=True)
+    
+    for exp in expenses:
+        with st.container():
+            c1, c2, c3 = st.columns([3, 4, 1.5], gap="medium")
+            with c1:
+                st.markdown(
+                    f"<div style='margin-top: 5px; margin-bottom: 8px;'>"
+                    f"<span style='color:#eee; font-size:15px; font-weight:600;'>{exp['description']}</span><br/>"
+                    f"<span style='color:#888; font-size:12px;'>{_to_local_display_time(exp['timestamp'])}</span>"
+                    f"</div>",
+                    unsafe_allow_html=True
+                )
+                st.markdown(f"<span style='background:#101b15; color:#44aa88; padding:2px 8px; border-radius:4px; font-size:11px; text-transform:uppercase; letter-spacing:0.04em;'>{exp.get('category', 'Default')}</span>", unsafe_allow_html=True)
+            with c2:
+                st.markdown(
+                    f'<div style="display:flex; align-items:center; height:100%; min-height:55px;">'
+                    f'<div class="cipher-val" title="Encrypted amount">'
+                    f"{ciphertext_to_display(exp['ciphertext'])}</div></div>",
+                    unsafe_allow_html=True,
+                )
+            with c3:
+                st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
+                if st.button("🗑 Delete", key=f"del_{exp['id']}", help="Delete expense", use_container_width=True):
+                    delete_expense(conn, exp["id"])
+                    st.session_state.total_result = None
+                    if "date_filter_total" in st.session_state and "category_filter_total" in st.session_state:
+                        total_val, count, range_label, drift, refreshed = _compute_total_for_filters(
+                            conn,
+                            ctx,
+                            st.session_state.date_filter_total,
+                            st.session_state.category_filter_total,
+                        )
+                        if total_val is not None:
+                            st.session_state.total_result = (total_val, count, range_label, drift, refreshed)
+                    st.rerun()
+        st.markdown('<hr class="cs-divider" style="margin: 0.75rem 0;">', unsafe_allow_html=True)
 
 # ── Calculate total ───────────────────────────────────────────────────────────
 if expenses:
     st.markdown('<hr class="cs-divider">', unsafe_allow_html=True)
 
-    col_a, col_b = st.columns([2, 1])
+    col_a, col_b, col_c = st.columns([2, 2, 1])
     with col_a:
         date_range = st.date_input(
             "Filter by date range (optional — leave empty for all)",
             value=(),
             label_visibility="visible",
+            key="date_filter_total",
         )
     with col_b:
-        st.write("")  # vertical align
+        category_options = ["All"] + get_distinct_categories(conn)
+        category_filter = st.selectbox(
+            "Filter by category",
+            category_options,
+            index=0,
+            key="category_filter_total",
+        )
+    with col_c:
+        st.write("")
         calc = st.button("Calculate Total", use_container_width=True)
 
     if calc:
-        filtered = expenses
-        range_label = "all expenses"
-
-        if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
-            start_dt: date = date_range[0]
-            end_dt:   date = date_range[1]
-            filtered = [
-                e for e in expenses
-                if start_dt
-                <= datetime.fromisoformat(e["timestamp"]).date()
-                <= end_dt
-            ]
-            range_label = f"{start_dt.strftime('%b %d')} – {end_dt.strftime('%b %d, %Y')}"
-
-        if not filtered:
-            st.warning("No expenses found in the selected date range.")
+        total_val, count, range_label, drift, refreshed = _compute_total_for_filters(
+            conn,
+            ctx,
+            date_range,
+            category_filter,
+        )
+        if total_val is None:
+            st.warning("No expenses found for current filters.")
             st.session_state.total_result = None
         else:
-            with st.spinner(
-                f"Computing homomorphic sum of {len(filtered)} "
-                f"ciphertext{'s' if len(filtered) > 1 else ''}…"
-            ):
-                total_val = decrypt_sum(ctx, [e["ciphertext"] for e in filtered])
-            st.session_state.total_result = (total_val, len(filtered), range_label)
+            st.session_state.total_result = (total_val, count, range_label, drift, refreshed)
 
     if st.session_state.total_result is not None:
-        total_val, count, range_label = st.session_state.total_result
+        total_val, count, range_label, drift, refreshed = st.session_state.total_result
         st.markdown(
             f'<p class="cs-total-label">Decrypted total</p>'
             f'<p class="cs-total">${total_val:,.2f}</p>'
@@ -403,8 +593,15 @@ if expenses:
             f" · {range_label}</p>",
             unsafe_allow_html=True,
         )
-        # Precision check: CKKS is approximate — flag if noise causes >0.5¢ drift
-        if abs(total_val - round(total_val, 2)) > 0.005:
+        if refreshed:
+            st.markdown(
+                '<div class="cs-warn" style="margin-top:0.75rem;">'
+                "⚠ Precision health: aggregate ciphertext was auto-refreshed locally "
+                "to maintain stability."
+                "</div>",
+                unsafe_allow_html=True,
+            )
+        elif drift > 0.005:
             st.markdown(
                 '<div class="cs-warn" style="margin-top:0.75rem;">'
                 "⚠ Precision notice: noise accumulation detected in this result "
@@ -418,46 +615,103 @@ with st.expander("Key & Data Management"):
     st.caption(
         "Keep a backup of your secret key. Without it, all encrypted data is irrecoverable."
     )
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         with open(_KEY_PATH, "rb") as f:
             st.download_button(
                 "⬇ Download Secret Key",
                 data=f.read(),
-                file_name="cipherspend_secret.key",
+                file_name="cipherspend_secret.key.enc",
                 mime="application/octet-stream",
                 key="dl_key_expander",
             )
 
     with col2:
-        if os.path.exists(_DB_PATH):
-            with open(_DB_PATH, "rb") as f:
-                st.download_button(
-                    "⬇ Export Encrypted Ledger",
-                    data=f.read(),
-                    file_name="cipherspend_expenses.db",
-                    mime="application/octet-stream",
-                    key="dl_db",
-                )
+        with open(_DB_PATH, "rb") as f:
+            st.download_button(
+                "⬇ Export Ledger (SQLite)",
+                data=f.read(),
+                file_name="cipherspend_expenses.db",
+                mime="application/octet-stream",
+                key="dl_db_sqlite",
+            )
+
+    with col3:
+        st.download_button(
+            "⬇ Export Ledger (SQL)",
+            data=export_ledger_sql_dump(conn),
+            file_name="cipherspend_expenses.sql",
+            mime="text/plain",
+            key="dl_db_sql_dump",
+        )
 
     st.markdown('<hr class="cs-divider">', unsafe_allow_html=True)
-    st.caption("Restore a previously backed-up key (replaces current key).")
-    uploaded_key = st.file_uploader(
-        "Upload secret key file",
-        type=["key"],
+    st.caption(
+        "Restore from backup on this device (uploads are used only locally in this app). "
+        "You can apply key only, ledger only, or both."
+    )
+
+    restore_key = st.file_uploader(
+        "Upload encrypted secret key file",
+        type=["enc", "key"],
         label_visibility="collapsed",
         key="upload_key",
     )
-    if uploaded_key is not None:
-        key_data = uploaded_key.read()
+    if restore_key is not None:
+        key_data = restore_key.read()
         try:
-            _test_ctx = load_context(key_data)
-            with open(_KEY_PATH, "wb") as f:
-                f.write(key_data)
-            st.session_state.ctx = _test_ctx
-            st.session_state.conn = None  # force DB reconnect
-            st.success("Key restored successfully.")
+            if st.session_state.passphrase is None:
+                st.error("Unlock with passphrase before restoring key.")
+            elif not is_valid_key_envelope(key_data):
+                st.error("Invalid encrypted key file.")
+            else:
+                decrypt_key_material(key_data, st.session_state.passphrase)
+                st.session_state.restore_key_bytes = key_data
+                st.success("Encrypted key validated and staged.")
+        except Exception:
+            st.error("Invalid key file or incorrect passphrase.")
+
+    restore_ledger = st.file_uploader(
+        "Upload encrypted ledger (.db)",
+        type=["db", "sqlite", "sqlite3"],
+        label_visibility="collapsed",
+        key="upload_ledger",
+    )
+    if restore_ledger is not None:
+        ledger_data = restore_ledger.read()
+        if is_valid_ledger_bytes(ledger_data):
+            st.session_state.restore_ledger_bytes = ledger_data
+            st.success("Encrypted ledger validated and staged.")
+        else:
+            st.error("Invalid ledger file.")
+
+    staged_count = int(st.session_state.restore_key_bytes is not None) + int(
+        st.session_state.restore_ledger_bytes is not None
+    )
+    if staged_count > 0:
+        restore_summary = []
+        if st.session_state.restore_key_bytes is not None:
+            restore_summary.append("secret key")
+        if st.session_state.restore_ledger_bytes is not None:
+            restore_summary.append("encrypted ledger")
+        st.caption(f"Ready to apply: {', '.join(restore_summary)}.")
+        if st.button("Apply Restore", use_container_width=True, key="apply_restore"):
+            try:
+                _apply_restore_payloads()
+                st.success("Restore applied successfully.")
+                st.rerun()
+            except Exception:
+                st.error("Restore failed. Please verify backup files and try again.")
+        if st.button("Clear staged restore files", key="clear_restore_stage"):
+            st.session_state.restore_key_bytes = None
+            st.session_state.restore_ledger_bytes = None
             st.rerun()
-        except Exception as exc:
-            st.error(f"Invalid key file: {exc}")
+
+    st.markdown('<hr class="cs-divider">', unsafe_allow_html=True)
+    data_files = []
+    if Path(_KEY_PATH).exists():
+        data_files.append("secret.key")
+    if Path(_DB_PATH).exists():
+        data_files.append("expenses.db")
+    st.caption(f"Auto-recovery files detected in data/: {', '.join(data_files) if data_files else 'none'}")
