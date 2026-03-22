@@ -31,6 +31,7 @@ class ExpenseDB(Base):
     vault_id = Column(String, index=True, nullable=False)
     description = Column(String, nullable=False)
     category = Column(String, nullable=False)
+    currency = Column(String, nullable=False, default="LKR")
     timestamp = Column(String, nullable=False)
     ciphertext = Column(Text, nullable=False)  # Base64 node-seal ciphertext
 

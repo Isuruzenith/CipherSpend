@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useCrypto } from '@/context/CryptoContext';
 import { Button } from '@/components/ui/button';
@@ -18,7 +19,7 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { toast } from 'sonner';
-import { KeyRound, ShieldAlert, MonitorSmartphone, DownloadCloud } from 'lucide-react';
+import { KeyRound, ShieldAlert, MonitorSmartphone, DownloadCloud, ArrowLeft } from 'lucide-react';
 
 export default function Settings() {
   const { rotatePassphrase, exportWrappedKey, token, decryptAmount } = useCrypto();
@@ -60,12 +61,12 @@ export default function Settings() {
       const data = await res.json();
       
       toast.loading("Decrypting " + data.length + " rows locally...", { id: loadToast });
-      let csvContent = "data:text/csv;charset=utf-8,ID,Date,Category,Description,DecryptedAmount\n";
+      let csvContent = "data:text/csv;charset=utf-8,ID,Date,Currency,Category,Description,DecryptedAmount\n";
       
       data.forEach((exp: any) => {
         let val = 0;
         try { val = decryptAmount(exp.amountCiphertext); } catch(e){}
-        const row = [exp.id, exp.timestamp, exp.category, `"${exp.description}"`, val.toFixed(2)].join(",");
+        const row = [exp.id, exp.timestamp, exp.currency || 'LKR', exp.category, `"${exp.description}"`, val.toFixed(2)].join(",");
         csvContent += row + "\r\n";
       });
       
@@ -90,6 +91,14 @@ export default function Settings() {
         <div>
           <h2 className="text-2xl font-bold text-zinc-50 tracking-tight">Vault Settings & Polish</h2>
           <p className="text-zinc-400 text-sm">Manage advanced security, cryptographic keys, and edge nodes.</p>
+          <div className="mt-4">
+            <Button asChild variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-200 hover:text-zinc-100">
+              <Link to="/dashboard" className="inline-flex items-center gap-2">
+                <ArrowLeft size={14} />
+                Back to Dashboard
+              </Link>
+            </Button>
+          </div>
         </div>
 
         <Separator className="bg-zinc-800" />

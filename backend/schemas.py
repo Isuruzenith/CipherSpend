@@ -38,6 +38,7 @@ class ExpenseCreate(BaseModel):
     id: str
     description: str
     category: str
+    currency: str = "LKR"
     timestamp: str
     amountCiphertext: str
 
@@ -45,6 +46,7 @@ class ExpenseResponse(BaseModel):
     id: str
     description: str
     category: str
+    currency: str = "LKR"
     timestamp: str
     amountCiphertext: str
 
@@ -54,5 +56,6 @@ class ExpenseResponse(BaseModel):
 class ExpenseUpdate(BaseModel):
     description: str
     category: str
+    currency: str = "LKR"
     timestamp: str
     amountCiphertext: str

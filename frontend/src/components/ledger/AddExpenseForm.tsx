@@ -20,11 +20,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { toast } from 'sonner';
+import { SUPPORTED_CURRENCIES, type SupportedCurrency, getCurrencySymbol } from '@/lib/currency';
 
 export interface ExpenseRecord {
   id: string;
   description: string;
   category: string;
+  currency: string;
   amountCiphertext: string;
   timestamp: string;
 }
@@ -41,6 +43,7 @@ export const AddExpenseForm: React.FC<{
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
   const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
+  const [currency, setCurrency] = useState<SupportedCurrency>('LKR');
   const [customCategories, setCustomCategories] = useState<string[]>([]);
   const [newCategory, setNewCategory] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -105,6 +108,7 @@ export const AddExpenseForm: React.FC<{
               id: editExpense?.id ?? Math.random().toString(36).substr(2, 9),
               description: desc,
               category,
+              currency,
               amountCiphertext: ct,
               timestamp: editExpense?.timestamp ?? new Date().toISOString()
             };
@@ -133,6 +137,7 @@ export const AddExpenseForm: React.FC<{
                 setDesc('');
                 setAmount('');
                 setCategory(DEFAULT_CATEGORIES[0]);
+                setCurrency('LKR');
                 setOpen(false);
                 if (onCancelEdit) onCancelEdit();
               })
@@ -153,6 +158,7 @@ export const AddExpenseForm: React.FC<{
     if (!editExpense) return;
     setDesc(editExpense.description);
     setCategory(editExpense.category);
+    setCurrency((editExpense.currency as SupportedCurrency) || 'LKR');
     setOpen(true);
     try {
       const val = decryptAmount(editExpense.amountCiphertext);
@@ -207,8 +213,8 @@ export const AddExpenseForm: React.FC<{
             />
           </div>
           
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="space-y-2">
               <Label className="text-zinc-300">Category</Label>
               <Select value={category} onValueChange={setCategory}>
                 <SelectTrigger className="bg-zinc-900 border-zinc-800 text-zinc-100">
@@ -236,25 +242,39 @@ export const AddExpenseForm: React.FC<{
                   Add
                 </Button>
               </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label className="text-zinc-300">Currency</Label>
+                <Select value={currency} onValueChange={(v) => setCurrency(v as SupportedCurrency)}>
+                  <SelectTrigger className="bg-zinc-900 border-zinc-800 text-zinc-100">
+                    <SelectValue placeholder="Currency" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
+                    {SUPPORTED_CURRENCIES.map((cur) => (
+                      <SelectItem key={cur} value={cur}>{cur}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-            
+
             <div className="space-y-2">
-              <Label htmlFor="amount" className="text-zinc-300">Amount (USD)</Label>
+              <Label htmlFor="amount" className="text-zinc-300">Amount ({currency})</Label>
               <div className="relative">
-                <span className="absolute left-3 top-2 text-zinc-500 font-mono">$</span>
+                <span className="absolute left-3 top-2 text-zinc-500 font-mono">{getCurrencySymbol(currency)}</span>
                 <Input 
                   id="amount"
                   type="number" 
                   step="0.01"
                   value={amount}
                   onChange={(e) => setAmount(e.target.value)}
-                  className="font-mono bg-zinc-900 border-zinc-800 text-zinc-100 pl-7"
+                  className="font-mono bg-zinc-900 border-zinc-800 text-zinc-100 pl-12"
                   placeholder="0.00"
                   required
                 />
               </div>
             </div>
-          </div>
           
             <div className="flex gap-2">
               {editExpense && (

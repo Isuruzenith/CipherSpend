@@ -1,58 +1,37 @@
 import React, { useEffect, useState } from 'react';
 import { useCrypto } from '../../context/CryptoContext';
 import { Lock } from 'lucide-react';
-import { fetchAndDecryptExpenseAggregates } from '@/lib/expenseAggregation';
+import type { ExpenseRecord } from '@/components/ledger/AddExpenseForm';
+import { getCurrencySymbol } from '@/lib/currency';
 
-export const TotalDisplay: React.FC<{ expensesCount: number }> = ({ expensesCount }) => {
-  const { isCryptoReady, decryptAmount, token } = useCrypto();
+export const TotalDisplay: React.FC<{ expenses: ExpenseRecord[]; currency: string }> = ({ expenses, currency }) => {
+  const { isCryptoReady, decryptAmount } = useCrypto();
   const [total, setTotal] = useState<number | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const expensesCount = expenses.length;
 
   useEffect(() => {
-    if (!isCryptoReady || !token) return;
+    if (!isCryptoReady) {
+      setTotal(null);
+      return;
+    }
     if (expensesCount === 0) {
       setTotal(0);
       return;
     }
 
     setIsSyncing(true);
-    fetch('http://localhost:8000/api/expenses/total', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then(async (data) => {
-        if (typeof data.totalCiphertext === 'string' && data.totalCiphertext.length > 0) {
-          try {
-            // Decrypt the single homomorphically aggregated ciphertext locally!
-            const val = decryptAmount(data.totalCiphertext);
-            setTotal(val);
-          } catch (error) {
-            console.warn('Aggregate total decrypt failed. Falling back to per-row local aggregation.', error);
-            const fallback = await fetchAndDecryptExpenseAggregates(token, decryptAmount);
-            setTotal(fallback.total);
-          }
-        } else {
-          const fallback = await fetchAndDecryptExpenseAggregates(token, decryptAmount);
-          setTotal(fallback.total);
-        }
-      })
-      .catch(async (err) => {
-        console.error('Total fetch failed:', err);
-        try {
-          const fallback = await fetchAndDecryptExpenseAggregates(token, decryptAmount);
-          setTotal(fallback.total);
-        } catch (fallbackErr) {
-          console.error('Total fallback failed:', fallbackErr);
-          setTotal(0);
-        }
-      })
-      .finally(() => setIsSyncing(false));
-  }, [expensesCount, isCryptoReady, token, decryptAmount]);
+    let totalByRows = 0;
+    for (const exp of expenses) {
+      try {
+        totalByRows += decryptAmount(exp.amountCiphertext);
+      } catch {
+        // Ignore row that fails decryption.
+      }
+    }
+    setTotal(totalByRows);
+    setIsSyncing(false);
+  }, [expensesCount, isCryptoReady, decryptAmount, expenses]);
 
   return (
     <div className="p-6 md:p-8 rounded-2xl bg-surface border border-surfaceHighlight relative overflow-hidden shadow-xl">
@@ -64,10 +43,10 @@ export const TotalDisplay: React.FC<{ expensesCount: number }> = ({ expensesCoun
             <span className={`w-2 h-2 rounded-full ${isSyncing ? "bg-yellow-500 animate-ping" : "bg-accent animate-pulse"}`}></span>
             Decrypted Total (FHE Server-Side Sum)
          </h2>
-         <div className="text-5xl font-bold text-white tracking-tight flex items-baseline gap-1 mt-4">
-            <span className="text-accent">$</span>
+          <div className="text-5xl font-bold text-white tracking-tight flex items-baseline gap-1 mt-4">
+            <span className="text-accent">{getCurrencySymbol(currency)}</span>
             {total !== null ? total.toFixed(2) : '---'}
-         </div>
+          </div>
          <p className="text-xs text-muted mt-6 font-mono">Aggregated from {expensesCount} encrypted entries</p>
        </div>
     </div>

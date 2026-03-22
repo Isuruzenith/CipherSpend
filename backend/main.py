@@ -35,8 +35,21 @@ app.add_middleware(
 class ContextUpload(BaseModel):
     contextBase64: str
 
+def ensure_expenses_currency_column():
+    conn = database.engine.raw_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("PRAGMA table_info(expenses)")
+        columns = [row[1] for row in cur.fetchall()]
+        if "currency" not in columns:
+            cur.execute("ALTER TABLE expenses ADD COLUMN currency TEXT NOT NULL DEFAULT 'LKR'")
+            conn.commit()
+    finally:
+        conn.close()
+
 # Database setup
 database.Base.metadata.create_all(bind=database.engine)
+ensure_expenses_currency_column()
 
 def get_db():
     db = database.SessionLocal()
@@ -196,6 +209,7 @@ def create_expense(
         vault_id=current_user.vault_id or current_user.id,
         description=expense.description,
         category=expense.category,
+        currency=expense.currency,
         timestamp=expense.timestamp,
         ciphertext=expense.amountCiphertext
     )
@@ -215,6 +229,7 @@ def get_expenses(
             id=e.id,
             description=e.description,
             category=e.category,
+            currency=e.currency or "LKR",
             timestamp=e.timestamp,
             amountCiphertext=e.ciphertext
         ) for e in expenses
@@ -237,6 +252,7 @@ def update_expense(
 
     expense.description = payload.description
     expense.category = payload.category
+    expense.currency = payload.currency
     expense.timestamp = payload.timestamp
     expense.ciphertext = payload.amountCiphertext
     db.commit()
@@ -245,6 +261,7 @@ def update_expense(
         id=expense.id,
         description=expense.description,
         category=expense.category,
+        currency=expense.currency or "LKR",
         timestamp=expense.timestamp,
         amountCiphertext=expense.ciphertext
     )

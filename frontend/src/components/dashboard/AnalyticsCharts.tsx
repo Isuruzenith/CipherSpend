@@ -6,7 +6,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Lock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
-import { fetchAndDecryptExpenseAggregates } from '@/lib/expenseAggregation';
+import type { ExpenseRecord } from '@/components/ledger/AddExpenseForm';
 
 interface CategoryData {
   name: string;
@@ -29,67 +29,36 @@ const mapCategoryTotalsToChartData = (byCategory: Record<string, number>): Categ
     .filter(([, value]) => Number.isFinite(value) && value > 0)
     .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
 
-export const AnalyticsCharts: React.FC<{ expensesCount: number }> = ({ expensesCount }) => {
-  const { isCryptoReady, decryptAmount, token } = useCrypto();
+export const AnalyticsCharts: React.FC<{ expenses: ExpenseRecord[] }> = ({ expenses }) => {
+  const { isCryptoReady, decryptAmount } = useCrypto();
   const [data, setData] = useState<CategoryData[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const expensesCount = expenses.length;
 
   useEffect(() => {
-    if (!isCryptoReady || !token) return;
+    if (!isCryptoReady) {
+      setData([]);
+      return;
+    }
     if (expensesCount === 0) {
       setData([]);
       return;
     }
 
     setIsSyncing(true);
-    fetch('http://localhost:8000/api/totals/breakdown', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-      .then((res) => {
-        if (!res.ok) {
-          throw new Error(`HTTP error! status: ${res.status}`);
-        }
-        return res.json();
-      })
-      .then(async (breakdown) => {
-        if (!breakdown || typeof breakdown !== 'object') {
-          throw new Error('Invalid response format');
-        }
-        const parsed: CategoryData[] = [];
-        let hasDecryptFailures = false;
-        let failedCategoryCount = 0;
-        for (const [category, ciphertext] of Object.entries(breakdown)) {
-          try {
-            if (typeof ciphertext !== 'string' || ciphertext.length === 0) continue;
-            const val = decryptAmount(ciphertext);
-            if (val > 0) {
-                parsed.push({ name: category, value: Number(val.toFixed(2)) });
-            }
-          } catch {
-            hasDecryptFailures = true;
-            failedCategoryCount += 1;
-          }
-        }
-        if (hasDecryptFailures) {
-          console.warn(`Category aggregate decrypt failed for ${failedCategoryCount} category(ies). Falling back to per-row local aggregation.`);
-          const fallback = await fetchAndDecryptExpenseAggregates(token, decryptAmount);
-          setData(mapCategoryTotalsToChartData(fallback.byCategory));
-          return;
-        }
-        setData(parsed);
-      })
-      .catch(async (err) => {
-        console.error("Analytics fetch failed:", err instanceof Error ? err.message : String(err));
-        try {
-          const fallback = await fetchAndDecryptExpenseAggregates(token, decryptAmount);
-          setData(mapCategoryTotalsToChartData(fallback.byCategory));
-        } catch (fallbackErr) {
-          console.error('Analytics fallback failed:', fallbackErr);
-          setData([]);
-        }
-      })
-      .finally(() => setIsSyncing(false));
-  }, [expensesCount, isCryptoReady, token, decryptAmount]);
+    const byCategory: Record<string, number> = {};
+    for (const exp of expenses) {
+      try {
+        const value = decryptAmount(exp.amountCiphertext);
+        if (!Number.isFinite(value) || value <= 0) continue;
+        byCategory[exp.category] = (byCategory[exp.category] ?? 0) + value;
+      } catch {
+        // Ignore row that fails decryption.
+      }
+    }
+    setData(mapCategoryTotalsToChartData(byCategory));
+    setIsSyncing(false);
+  }, [expensesCount, isCryptoReady, decryptAmount, expenses]);
 
   const chartConfig = useMemo(() => {
     const config: Record<string, any> = {};

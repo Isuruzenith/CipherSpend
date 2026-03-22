@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { getCurrencySymbol } from '@/lib/currency';
 
 export const LedgerView: React.FC<{
   expenses: ExpenseRecord[];
@@ -39,6 +40,7 @@ export const LedgerView: React.FC<{
           <TableRow className="border-zinc-800 hover:bg-transparent">
             <TableHead className="text-zinc-400 font-medium">Description</TableHead>
             <TableHead className="text-zinc-400 font-medium">Category</TableHead>
+            <TableHead className="text-zinc-400 font-medium">Currency</TableHead>
             <TableHead className="text-zinc-400 font-medium">Date</TableHead>
             <TableHead className="text-right text-zinc-400 font-medium">Amount</TableHead>
             <TableHead className="text-right text-zinc-400 font-medium">Actions</TableHead>
@@ -61,6 +63,9 @@ export const LedgerView: React.FC<{
                     {exp.category}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-zinc-400 text-xs font-mono">
+                  {exp.currency || 'LKR'}
+                </TableCell>
                 <TableCell className="text-zinc-500 text-xs font-mono">
                   {new Date(exp.timestamp).toLocaleString(undefined, {
                      dateStyle: 'short',
@@ -71,7 +76,7 @@ export const LedgerView: React.FC<{
                   <div className="flex flex-col items-end gap-1.5">
                     {decryptedVal !== null ? (
                       <span className="text-zinc-50 font-mono font-medium tracking-tight">
-                        ${decryptedVal.toFixed(2)}
+                        {getCurrencySymbol(exp.currency || 'LKR')}{decryptedVal.toFixed(2)}
                       </span>
                     ) : (
                       <span className="text-zinc-600 text-xs italic">Decrypting...</span>
