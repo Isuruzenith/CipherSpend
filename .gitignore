@@ -1,0 +1,19 @@
+# CipherSpend — never commit keys or encrypted data
+data/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.agent/MEMORY.md
+
+# Node / Frontend
+node_modules/
+dist/
+.env
+
+# Cloud Ledger Database
+*.db
+cloud_ledger.db

@@ -1,0 +1,25 @@
+services:
+  backend:
+    build:
+      context: .\backend
+      dockerfile: Dockerfile
+    container_name: cipherspend-backend
+    ports:
+      - "8000:8000"
+    volumes:
+      - cipherspend-data:/app
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .\frontend
+      dockerfile: Dockerfile
+    container_name: cipherspend-frontend
+    depends_on:
+      - backend
+    ports:
+      - "5173:80"
+    restart: unless-stopped
+
+volumes:
+  cipherspend-data:
