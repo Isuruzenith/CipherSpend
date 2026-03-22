@@ -8,11 +8,13 @@ Run with:  streamlit run app.py
 """
 import hashlib
 import os
+import shutil
 import uuid
 from datetime import datetime, date, timezone, timedelta
 from pathlib import Path
 
 import streamlit as st
+import tenseal as ts
 
 # ── Page config (must be first Streamlit call) ────────────────────────────────
 st.set_page_config(
@@ -183,6 +185,12 @@ try:
         is_valid_ledger_bytes,
         restore_ledger_file_from_bytes,
         save_expense,
+        soft_delete_expense,
+        restore_expense,
+        get_deleted_expenses,
+        update_expense,
+        add_category,
+        remove_category,
     )
 except ImportError as exc:
     st.error(f"Missing dependency: {exc}\n\nRun: `pip install -r requirements.txt`")
@@ -195,7 +203,6 @@ _KEY_PATH = os.path.join(_DATA_DIR, "secret.key.enc")
 _LEGACY_KEY_PATH = os.path.join(_DATA_DIR, "secret.key")
 _DB_PATH  = os.path.join(_DATA_DIR, "expenses.db")
 os.makedirs(_DATA_DIR, exist_ok=True)
-_CATEGORY_OPTIONS = ["Groceries", "Utilities", "Entertainment", "Transport", "Health", "Other"]
 _LOCAL_TZ = timezone(timedelta(hours=5, minutes=30))
 
 # ── Session state defaults ────────────────────────────────────────────────────
@@ -219,6 +226,8 @@ if "needs_passphrase_setup" not in st.session_state:
     st.session_state.needs_passphrase_setup = False
 if "legacy_key_found" not in st.session_state:
     st.session_state.legacy_key_found = False
+if "last_deleted_id" not in st.session_state:
+    st.session_state.last_deleted_id = None
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown('<p class="cs-title">CipherSpend</p>', unsafe_allow_html=True)
@@ -449,8 +458,139 @@ if st.session_state.conn is None:
     st.session_state.conn = init_db(_DB_PATH)
 conn = st.session_state.conn
 
+# ── Dialogs ───────────────────────────────────────────────────────────────────
+@st.dialog("Edit Expense")
+def edit_expense_dialog(exp_id: str, current_desc: str, current_cat: str):
+    new_desc = st.text_input("Description", value=current_desc)
+    cat_opts = get_distinct_categories(st.session_state.conn)
+    idx = cat_opts.index(current_cat) if current_cat in cat_opts else 0
+    new_cat = st.selectbox("Category", cat_opts, index=idx)
+    if st.button("Save Changes"):
+        update_expense(st.session_state.conn, exp_id, new_desc, new_cat)
+        st.session_state.total_result = None
+        st.rerun()
+
+@st.dialog("Manage Categories")
+def manage_categories_dialog():
+    st.write("Add or remove custom categories.")
+    cat_opts = get_distinct_categories(st.session_state.conn)
+    col1, col2 = st.columns([3,1])
+    with col1:
+        new_c = st.text_input("New category", label_visibility="collapsed", placeholder="New category name")
+    with col2:
+        if st.button("Add"):
+            if new_c.strip():
+                add_category(st.session_state.conn, new_c.strip())
+                st.rerun()
+    st.divider()
+    for c in cat_opts:
+        c1, c2 = st.columns([3,1])
+        c1.write(c)
+        if c1.button("Remove", key=f"rm_cat_{c}", help=f"Remove {c}"):
+            remove_category(st.session_state.conn, c)
+            st.rerun()
+
+
+@st.dialog("Rotate Secret Key")
+def rotate_key_dialog():
+    st.markdown("### Key Rotation")
+    st.write("This will decrypt and re-encrypt your entire database with a new secret key.")
+    st.warning("If this process is interrupted, your database will be restored to its previous state automatically.", icon="⚠️")
+    
+    current_pass = st.text_input("Current Passphrase", type="password")
+    new_pass = st.text_input("New Passphrase (or re-use current)", type="password")
+    new_pass2 = st.text_input("Confirm New Passphrase", type="password")
+    
+    if st.button("Start Rotation", use_container_width=True):
+        if not current_pass or not new_pass or new_pass != new_pass2:
+            st.error("Invalid passphrases or passphrases do not match.")
+            return
+
+        # 1. Verify current passphrase
+        try:
+            with open(_KEY_PATH, "rb") as f:
+                env = f.read()
+            decrypt_key_material(env, current_pass)
+        except Exception:
+            st.error("Incorrect current passphrase.")
+            return
+            
+        progress_bar = st.progress(0, text="Preparing backups...")
+            
+        # 2. Pre-flight backup
+        bak_db = _DB_PATH + ".bak"
+        bak_key = _KEY_PATH + ".bak"
+        try:
+            shutil.copy2(_DB_PATH, bak_db)
+            shutil.copy2(_KEY_PATH, bak_key)
+        except Exception as e:
+            st.error(f"Failed to create pre-flight backups: {e}")
+            return
+            
+        # 3. Context Generation & Re-encryption
+        try:
+            progress_bar.progress(5, text="Generating new CKKS context (this takes a moment)...")
+            new_ctx = create_context()
+            raw_key = serialize_context(new_ctx, include_sk=True)
+            new_env = encrypt_key_material(raw_key, new_pass)
+            
+            expenses_active = get_expenses(st.session_state.conn)
+            expenses_deleted = get_deleted_expenses(st.session_state.conn)
+            all_expenses = expenses_active + expenses_deleted
+            total = len(all_expenses)
+            
+            st.session_state.conn.execute("BEGIN TRANSACTION")
+            
+            for i, exp in enumerate(all_expenses):
+                progress_msg = f"Re-encrypting {i+1} of {total} expenses..."
+                progress_bar.progress(10 + int((i / max(total, 1)) * 80), text=progress_msg)
+                
+                # decrypt with old ctx
+                pt_amount = ts.ckks_vector_from(st.session_state.ctx, exp["ciphertext"]).decrypt()[0]
+                # encrypt with new ctx
+                new_ct = encrypt_amount(new_ctx, pt_amount)
+                # update db
+                st.session_state.conn.execute("UPDATE expenses SET ciphertext = ? WHERE id = ?", (new_ct, exp["id"]))
+                    
+            progress_bar.progress(95, text="Committing changes...")
+            st.session_state.conn.commit()
+            
+            # 4. Key Commit
+            with open(_KEY_PATH, "wb") as f:
+                f.write(new_env)
+                
+            # 5. Session state update
+            st.session_state.ctx = new_ctx
+            st.session_state.passphrase = new_pass
+            st.session_state.total_result = None
+            
+            # Trigger mandatory backup download next rerun
+            st.session_state.key_just_created = True 
+            
+            # 6. Cleanup
+            progress_bar.progress(100, text="Cleaning up...")
+            if os.path.exists(bak_db): os.remove(bak_db)
+            if os.path.exists(bak_key): os.remove(bak_key)
+            
+            st.rerun()
+            
+        except Exception as e:
+            st.error(f"Error during rotation: {e}")
+            st.session_state.conn.rollback()
+            # Restore from backup
+            if os.path.exists(bak_db):
+                shutil.move(bak_db, _DB_PATH)
+            if os.path.exists(bak_key):
+                shutil.move(bak_key, _KEY_PATH)
+            st.stop()
+
 # ── Add expense form ──────────────────────────────────────────────────────────
 st.markdown('<hr class="cs-divider">', unsafe_allow_html=True)
+
+form_c1, form_c2 = st.columns([3, 1])
+with form_c2:
+    if st.button("⚙ Manage Categories", use_container_width=True):
+        manage_categories_dialog()
 
 with st.form("add_expense", clear_on_submit=True):
     col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
@@ -471,9 +611,10 @@ with st.form("add_expense", clear_on_submit=True):
             label_visibility="collapsed",
         )
     with col3:
+        cat_opts = get_distinct_categories(conn)
         category = st.selectbox(
             "Category",
-            _CATEGORY_OPTIONS,
+            cat_opts,
             index=0,
             label_visibility="collapsed",
         )
@@ -496,6 +637,7 @@ if submitted:
             ciphertext=ct_bytes,
             category=category,
         )
+        st.session_state.last_deleted_id = None
         st.session_state.total_result = None  # invalidate cached total
         st.rerun()
 
@@ -532,19 +674,25 @@ else:
                 )
             with c3:
                 st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
-                if st.button("🗑 Delete", key=f"del_{exp['id']}", help="Delete expense", use_container_width=True):
-                    delete_expense(conn, exp["id"])
-                    st.session_state.total_result = None
-                    if "date_filter_total" in st.session_state and "category_filter_total" in st.session_state:
-                        total_val, count, range_label, drift, refreshed = _compute_total_for_filters(
-                            conn,
-                            ctx,
-                            st.session_state.date_filter_total,
-                            st.session_state.category_filter_total,
-                        )
-                        if total_val is not None:
-                            st.session_state.total_result = (total_val, count, range_label, drift, refreshed)
-                    st.rerun()
+                b1, b2 = st.columns(2)
+                with b1:
+                    if st.button("✎", key=f"edit_{exp['id']}", help="Edit expense"):
+                        edit_expense_dialog(exp['id'], exp['description'], exp.get('category', 'Default'))
+                with b2:
+                    if st.button("🗑", key=f"del_{exp['id']}", help="Soft delete expense"):
+                        soft_delete_expense(conn, exp["id"])
+                        st.session_state.last_deleted_id = exp["id"]
+                        st.session_state.total_result = None
+                        if "date_filter_total" in st.session_state and "category_filter_total" in st.session_state:
+                            total_val, count, range_label, drift, refreshed = _compute_total_for_filters(
+                                conn,
+                                ctx,
+                                st.session_state.date_filter_total,
+                                st.session_state.category_filter_total,
+                            )
+                            if total_val is not None:
+                                st.session_state.total_result = (total_val, count, range_label, drift, refreshed)
+                        st.rerun()
         st.markdown('<hr class="cs-divider" style="margin: 0.75rem 0;">', unsafe_allow_html=True)
 
 # ── Calculate total ───────────────────────────────────────────────────────────
@@ -610,6 +758,38 @@ if expenses:
                 unsafe_allow_html=True,
             )
 
+# ── Trash & Soft Delete ────────────────────────────────────────────────────────
+if st.session_state.last_deleted_id:
+    st.info("Expense moved to Trash.")
+    if st.button("Undo Delete", key="undo_soft_delete"):
+        restore_expense(conn, st.session_state.last_deleted_id)
+        st.session_state.last_deleted_id = None
+        st.session_state.total_result = None
+        st.rerun()
+    if st.button("Dismiss", key="dismiss_undo"):
+        st.session_state.last_deleted_id = None
+        st.rerun()
+
+deleted_expenses = get_deleted_expenses(conn)
+if deleted_expenses:
+    with st.expander(f"🗑️ Trash ({len(deleted_expenses)})"):
+        for de_exp in deleted_expenses:
+            st.write(f"**{de_exp['description']}** — {de_exp.get('category', 'Default')} ({_to_local_display_time(de_exp['timestamp'])})")
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Restore", key=f"restore_{de_exp['id']}"):
+                    restore_expense(conn, de_exp["id"])
+                    st.session_state.last_deleted_id = None
+                    st.session_state.total_result = None
+                    st.rerun()
+            with c2:
+                if st.button("Permanent Delete", key=f"hard_del_{de_exp['id']}"):
+                    delete_expense(conn, de_exp["id"])
+                    st.session_state.last_deleted_id = None
+                    st.session_state.total_result = None
+                    st.rerun()
+            st.markdown('<hr class="cs-divider" style="margin: 0.25rem 0;">', unsafe_allow_html=True)
+
 # ── Key & data management ─────────────────────────────────────────────────────
 with st.expander("Key & Data Management"):
     st.caption(
@@ -629,13 +809,36 @@ with st.expander("Key & Data Management"):
 
     with col2:
         with open(_DB_PATH, "rb") as f:
-            st.download_button(
-                "⬇ Export Ledger (SQLite)",
-                data=f.read(),
-                file_name="cipherspend_expenses.db",
-                mime="application/octet-stream",
-                key="dl_db_sqlite",
-            )
+            db_data = f.read()
+
+        import zipfile
+        import io
+        import hmac
+
+        try:
+            pp = st.session_state.passphrase or ""
+            mac = hmac.new(pp.encode("utf-8"), db_data, hashlib.sha256).hexdigest()
+            zip_buf = io.BytesIO()
+            with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+                zf.writestr("expenses.db", db_data)
+                zf.writestr("ledger_mac.txt", mac)
+            export_data = zip_buf.getvalue()
+            export_name = "cipherspend_ledger.zip"
+            mime_type = "application/zip"
+            btn_label = "⬇ Export Ledger Bundle (.zip)"
+        except Exception:
+            export_data = db_data
+            export_name = "cipherspend_expenses.db"
+            mime_type = "application/octet-stream"
+            btn_label = "⬇ Export Ledger (SQLite)"
+
+        st.download_button(
+            btn_label,
+            data=export_data,
+            file_name=export_name,
+            mime=mime_type,
+            key="dl_db_sqlite",
+        )
 
     with col3:
         st.download_button(
@@ -645,6 +848,10 @@ with st.expander("Key & Data Management"):
             mime="text/plain",
             key="dl_db_sql_dump",
         )
+        
+    st.markdown('<div style="height: 12px;"></div>', unsafe_allow_html=True)
+    if st.button("🔄 Rotate Secret Key", use_container_width=True):
+        rotate_key_dialog()
 
     st.markdown('<hr class="cs-divider">', unsafe_allow_html=True)
     st.caption(
@@ -673,13 +880,32 @@ with st.expander("Key & Data Management"):
             st.error("Invalid key file or incorrect passphrase.")
 
     restore_ledger = st.file_uploader(
-        "Upload encrypted ledger (.db)",
-        type=["db", "sqlite", "sqlite3"],
+        "Upload encrypted ledger bundle (.zip or .db)",
+        type=["zip", "db", "sqlite", "sqlite3"],
         label_visibility="collapsed",
         key="upload_ledger",
     )
     if restore_ledger is not None:
         ledger_data = restore_ledger.read()
+        
+        if restore_ledger.name.endswith(".zip"):
+            import zipfile
+            import io
+            import hmac
+            try:
+                with zipfile.ZipFile(io.BytesIO(ledger_data)) as zf:
+                    db_bytes = zf.read("expenses.db")
+                    mac_expected = zf.read("ledger_mac.txt").decode("utf-8")
+                    pp = st.session_state.passphrase or ""
+                    mac_actual = hmac.new(pp.encode("utf-8"), db_bytes, hashlib.sha256).hexdigest()
+                    if not hmac.compare_digest(mac_expected, mac_actual):
+                        st.error("Ledger HMAC verification failed! File may be corrupted or tampered with.")
+                        st.stop()
+                    ledger_data = db_bytes
+            except Exception as e:
+                st.error(f"Failed to read ZIP bundle: {e}")
+                st.stop()
+
         if is_valid_ledger_bytes(ledger_data):
             st.session_state.restore_ledger_bytes = ledger_data
             st.success("Encrypted ledger validated and staged.")

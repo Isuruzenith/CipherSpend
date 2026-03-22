@@ -15,11 +15,12 @@ CREATE TABLE IF NOT EXISTS expenses (
     description TEXT NOT NULL,
     timestamp   TEXT NOT NULL,
     ciphertext  BLOB NOT NULL,
-    category    TEXT NOT NULL DEFAULT 'Default'
+    category    TEXT NOT NULL DEFAULT 'Default',
+    is_deleted  INTEGER DEFAULT 0
 )
 """
 _BASE_COLUMNS = {"id", "description", "timestamp", "ciphertext"}
-_EXPECTED_COLUMNS = {"id", "description", "timestamp", "ciphertext", "category"}
+_EXPECTED_COLUMNS = {"id", "description", "timestamp", "ciphertext", "category", "is_deleted"}
 
 
 def init_db(path: str) -> sqlite3.Connection:
@@ -40,12 +41,28 @@ def _migrate_schema(conn: sqlite3.Connection) -> None:
         conn.execute(
             "ALTER TABLE expenses ADD COLUMN category TEXT NOT NULL DEFAULT 'Default'"
         )
+    if "is_deleted" not in columns:
+        conn.execute(
+            "ALTER TABLE expenses ADD COLUMN is_deleted INTEGER DEFAULT 0"
+        )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_expenses_timestamp ON expenses(timestamp)"
     )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_expenses_category ON expenses(category)"
     )
+    
+    conn.execute("""
+    CREATE TABLE IF NOT EXISTS categories (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE
+    )
+    """)
+    count = conn.execute("SELECT COUNT(*) FROM categories").fetchone()[0]
+    if count == 0:
+        default_categories = ["Default", "Food & Dining", "Transportation", "Shopping", "Entertainment", "Bills & Utilities"]
+        for cat in default_categories:
+            conn.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (cat,))
 
 
 def save_expense(
@@ -64,9 +81,9 @@ def save_expense(
 
 
 def get_expenses(conn: sqlite3.Connection) -> list[dict[str, Any]]:
-    """Return all expenses ordered by timestamp ascending."""
+    """Return all active expenses ordered by timestamp ascending."""
     rows = conn.execute(
-        "SELECT id, description, timestamp, ciphertext, category FROM expenses ORDER BY timestamp"
+        "SELECT id, description, timestamp, ciphertext, category FROM expenses WHERE is_deleted = 0 ORDER BY timestamp"
     ).fetchall()
     return [
         {
@@ -86,7 +103,7 @@ def get_expenses_filtered(
     end_iso: str | None = None,
     category: str | None = None,
 ) -> list[dict[str, Any]]:
-    sql = "SELECT id, description, timestamp, ciphertext, category FROM expenses WHERE 1=1"
+    sql = "SELECT id, description, timestamp, ciphertext, category FROM expenses WHERE is_deleted = 0"
     params: list[Any] = []
     if start_iso is not None:
         sql += " AND timestamp >= ?"
@@ -112,14 +129,55 @@ def get_expenses_filtered(
 
 
 def get_distinct_categories(conn: sqlite3.Connection) -> list[str]:
+    # Changed to read from categories table instead of looking at expenses
     rows = conn.execute(
-        "SELECT DISTINCT category FROM expenses WHERE category IS NOT NULL AND category != '' ORDER BY category"
+        "SELECT name FROM categories ORDER BY id"
     ).fetchall()
-    return [r[0] for r in rows]
+    mapped = [r[0] for r in rows]
+    return mapped
 
+def add_category(conn: sqlite3.Connection, name: str) -> None:
+    conn.execute("INSERT OR IGNORE INTO categories (name) VALUES (?)", (name,))
+    conn.commit()
+
+def remove_category(conn: sqlite3.Connection, name: str) -> None:
+    conn.execute("DELETE FROM categories WHERE name = ?", (name,))
+    conn.commit()
+
+
+def soft_delete_expense(conn: sqlite3.Connection, expense_id: str) -> None:
+    conn.execute("UPDATE expenses SET is_deleted = 1 WHERE id = ?", (expense_id,))
+    conn.commit()
+
+def restore_expense(conn: sqlite3.Connection, expense_id: str) -> None:
+    conn.execute("UPDATE expenses SET is_deleted = 0 WHERE id = ?", (expense_id,))
+    conn.commit()
+
+def get_deleted_expenses(conn: sqlite3.Connection) -> list[dict[str, Any]]:
+    rows = conn.execute(
+        "SELECT id, description, timestamp, ciphertext, category FROM expenses WHERE is_deleted = 1 ORDER BY timestamp DESC"
+    ).fetchall()
+    return [
+        {
+            "id": r[0],
+            "description": r[1],
+            "timestamp": r[2],
+            "ciphertext": r[3],
+            "category": r[4] or "Default",
+        }
+        for r in rows
+    ]
 
 def delete_expense(conn: sqlite3.Connection, expense_id: str) -> None:
+    # Now treated as hard_delete
     conn.execute("DELETE FROM expenses WHERE id = ?", (expense_id,))
+    conn.commit()
+
+def update_expense(conn: sqlite3.Connection, expense_id: str, description: str, category: str) -> None:
+    conn.execute(
+        "UPDATE expenses SET description = ?, category = ? WHERE id = ?",
+        (description, category, expense_id),
+    )
     conn.commit()
 
 
@@ -132,13 +190,13 @@ def export_ledger_sql_dump(conn: sqlite3.Connection) -> bytes:
 def _has_expected_schema(conn: sqlite3.Connection) -> bool:
     rows = conn.execute("PRAGMA table_info(expenses)").fetchall()
     cols = {r[1] for r in rows}
-    return _BASE_COLUMNS.issubset(cols)
+    return _EXPECTED_COLUMNS.issubset(cols)
 
 
 def is_valid_ledger_bytes(db_bytes: bytes) -> bool:
     """
-    Validate uploaded SQLite bytes by checking they open and include the
-    expected CipherSpend schema.
+    Validate uploaded SQLite bytes by checking they open, pass PRAGMA integrity_check,
+    and include the exact expected CipherSpend schema.
     """
     if not db_bytes:
         return False
@@ -150,6 +208,9 @@ def is_valid_ledger_bytes(db_bytes: bytes) -> bool:
             tmp_path = tmp.name
         conn = sqlite3.connect(tmp_path)
         try:
+            integrity = conn.execute("PRAGMA integrity_check").fetchone()[0]
+            if integrity.lower() != "ok":
+                return False
             return _has_expected_schema(conn)
         finally:
             conn.close()
@@ -157,7 +218,11 @@ def is_valid_ledger_bytes(db_bytes: bytes) -> bool:
         return False
     finally:
         if tmp_path and os.path.exists(tmp_path):
-            os.remove(tmp_path)
+            try:
+                os.remove(tmp_path)
+            except OSError:
+                pass
+
 
 
 def restore_ledger_file_from_bytes(db_bytes: bytes, target_path: str) -> None:
