@@ -8,9 +8,9 @@ CipherSpend uses **CKKS homomorphic encryption** (via [TenSEAL](https://github.c
 
 ## How it works
 
-1. A CKKS keypair is generated on first launch and saved to `data/secret.key`.
+1. A CKKS keypair is generated on first launch, then wrapped with a passphrase-derived key and saved to `data/secret.key.enc`.
 2. Every amount you enter is encrypted client-side before touching the database.
-3. SQLite stores only ciphertext BLOBs + plaintext metadata (description, timestamp) — never amounts.
+3. SQLite stores only ciphertext BLOBs + plaintext metadata (description, timestamp, category) — never amounts.
 4. "Calculate Total" performs homomorphic addition across stored ciphertexts, then decrypts only the final sum.
 
 **The secret key never leaves your machine.**
@@ -23,6 +23,7 @@ CipherSpend uses **CKKS homomorphic encryption** (via [TenSEAL](https://github.c
 |---|---|
 | UI | Streamlit ≥ 1.28 |
 | Encryption | TenSEAL 0.3.16 (CKKS, Microsoft SEAL) |
+| Key wrapping | PBKDF2-HMAC-SHA256 + AES-256-GCM (`cryptography`) |
 | Storage | SQLite |
 | Language | Python 3.10+ |
 
@@ -61,7 +62,7 @@ Dockerfile          # Container build
 .streamlit/
   config.toml       # Dark theme
 data/               # Runtime only — gitignored
-  secret.key        # Serialized CKKS context + secret key
+  secret.key.enc    # Encrypted key envelope (passphrase-protected)
   expenses.db       # SQLite database
 ```
 
@@ -71,11 +72,20 @@ data/               # Runtime only — gitignored
 
 | Action | How |
 |---|---|
-| **Backup key** | Download prompt on first launch, or *Key & Data Management* expander |
-| **Export ledger** | *Key & Data Management* → Export Encrypted Ledger |
-| **Restore key** | *Key & Data Management* → Upload secret key file |
+| **Backup key** | Download prompt on first launch, or *Key & Data Management* expander (`.enc`) |
+| **Export ledger** | *Key & Data Management* → Export Ledger (`.db`) or SQL dump (`.sql`) |
+| **Restore state** | *Key & Data Management* → Upload key and/or ledger, then click **Apply Restore** |
 
-> **Warning:** Losing `secret.key` makes all encrypted expenses permanently irrecoverable. Back it up before closing the app for the first time.
+> **Warning:** Losing `secret.key.enc` or forgetting your passphrase makes encrypted expenses permanently irrecoverable.
+
+### Restore on a new device
+
+1. Start CipherSpend once to create `data/`.
+2. Open *Key & Data Management*.
+3. Upload `cipherspend_secret.key.enc` and `cipherspend_expenses.db` (or just one, if needed).
+4. Click **Apply Restore**.
+
+CipherSpend validates files locally before replacing active data.
 
 ---
 
@@ -90,6 +100,8 @@ data/               # Runtime only — gitignored
 | Security level | ~128-bit |
 
 CKKS is an *approximate* scheme — precision is ~10–12 significant decimal digits, more than sufficient for currency. A precision warning is shown if noise drift exceeds $0.005 on the decrypted total.
+
+If drift grows or the sum involves many ciphertexts, CipherSpend automatically refreshes the aggregate ciphertext locally to keep precision stable.
 
 ---
 

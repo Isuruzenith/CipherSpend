@@ -8,3 +8,5 @@ __pycache__/
 .venv/
 venv/
 project.md
+currentstatus.md
+.agent/MEMORY.md
