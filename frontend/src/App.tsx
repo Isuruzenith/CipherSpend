@@ -1,11 +1,13 @@
+import { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { CryptoProvider, useCrypto } from './context/CryptoContext';
-import Landing from './pages/Landing';
-import SignUp from './pages/SignUp';
-import LogIn from './pages/LogIn';
-import Dashboard from './pages/Dashboard';
-import Settings from './pages/Settings';
 import { Toaster } from '@/components/ui/sonner';
+
+const Landing = lazy(() => import('./pages/Landing'));
+const SignUp = lazy(() => import('./pages/SignUp'));
+const LogIn = lazy(() => import('./pages/LogIn'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Settings = lazy(() => import('./pages/Settings'));
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isCryptoReady, token } = useCrypto();
@@ -25,15 +27,17 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 
 function AppRoutes() {
   return (
-    <Routes>
-      <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
-      <Route path="/signup" element={<PublicRoute><SignUp /></PublicRoute>} />
-      <Route path="/login" element={<PublicRoute><LogIn /></PublicRoute>} />
-      <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-      {/* Catch-all */}
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <Suspense fallback={<div className="min-h-screen bg-zinc-950" />}>
+      <Routes>
+        <Route path="/" element={<PublicRoute><Landing /></PublicRoute>} />
+        <Route path="/signup" element={<PublicRoute><SignUp /></PublicRoute>} />
+        <Route path="/login" element={<PublicRoute><LogIn /></PublicRoute>} />
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+        {/* Catch-all */}
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

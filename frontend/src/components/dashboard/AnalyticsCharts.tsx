@@ -2,10 +2,11 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useCrypto } from '../../context/CryptoContext';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Lock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
+import { fetchAndDecryptExpenseAggregates } from '@/lib/expenseAggregation';
 
 interface CategoryData {
   name: string;
@@ -13,6 +14,10 @@ interface CategoryData {
 }
 
 const COLORS = ['#4ade80', '#2dd4bf', '#818cf8', '#f472b6', '#fbbf24', '#a78bfa'];
+const mapCategoryTotalsToChartData = (byCategory: Record<string, number>): CategoryData[] =>
+  Object.entries(byCategory)
+    .filter(([, value]) => Number.isFinite(value) && value > 0)
+    .map(([name, value]) => ({ name, value: Number(value.toFixed(2)) }));
 
 export const AnalyticsCharts: React.FC<{ expensesCount: number }> = ({ expensesCount }) => {
   const { isCryptoReady, decryptAmount, token } = useCrypto();
@@ -30,38 +35,51 @@ export const AnalyticsCharts: React.FC<{ expensesCount: number }> = ({ expensesC
     fetch('http://localhost:8000/api/totals/breakdown', {
       headers: { 'Authorization': `Bearer ${token}` }
     })
-      .then(async (res) => {
+      .then((res) => {
         if (!res.ok) {
           throw new Error(`HTTP error! status: ${res.status}`);
         }
         return res.json();
       })
-      .then((breakdown) => {
+      .then(async (breakdown) => {
         if (!breakdown || typeof breakdown !== 'object') {
           throw new Error('Invalid response format');
         }
         const parsed: CategoryData[] = [];
+        let hasDecryptFailures = false;
+        let failedCategoryCount = 0;
         for (const [category, ciphertext] of Object.entries(breakdown)) {
           try {
-            if (typeof ciphertext !== 'string') continue;
+            if (typeof ciphertext !== 'string' || ciphertext.length === 0) continue;
             const val = decryptAmount(ciphertext);
             if (val > 0) {
                 parsed.push({ name: category, value: Number(val.toFixed(2)) });
             }
-          } catch (e: unknown) {
-            const errMsg = e instanceof Error ? e.message : String(e);
-            const errStack = e instanceof Error ? e.stack : undefined;
-            console.error("Failed to decrypt aggregate for", category, "Error:", errMsg, errStack);
+          } catch {
+            hasDecryptFailures = true;
+            failedCategoryCount += 1;
           }
+        }
+        if (hasDecryptFailures) {
+          console.warn(`Category aggregate decrypt failed for ${failedCategoryCount} category(ies). Falling back to per-row local aggregation.`);
+          const fallback = await fetchAndDecryptExpenseAggregates(token, decryptAmount);
+          setData(mapCategoryTotalsToChartData(fallback.byCategory));
+          return;
         }
         setData(parsed);
       })
-      .catch(err => {
+      .catch(async (err) => {
         console.error("Analytics fetch failed:", err instanceof Error ? err.message : String(err));
-        setData([]); // Clear data on total failure
+        try {
+          const fallback = await fetchAndDecryptExpenseAggregates(token, decryptAmount);
+          setData(mapCategoryTotalsToChartData(fallback.byCategory));
+        } catch (fallbackErr) {
+          console.error('Analytics fallback failed:', fallbackErr);
+          setData([]);
+        }
       })
       .finally(() => setIsSyncing(false));
-  }, [expensesCount, isCryptoReady, decryptAmount, token]);
+  }, [expensesCount, isCryptoReady, token, decryptAmount]);
 
   const chartConfig = useMemo(() => {
     const config: Record<string, any> = {};
@@ -92,37 +110,49 @@ export const AnalyticsCharts: React.FC<{ expensesCount: number }> = ({ expensesC
             )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pb-4">
         {data.length === 0 ? (
           <div className="h-[250px] flex items-center justify-center text-zinc-600 text-sm">
             {isSyncing ? "Homomorphically aggregating..." : "No data to display"}
           </div>
         ) : (
-          <div className="h-[250px] mt-4">
-            <ChartContainer config={chartConfig} className="mx-auto h-[250px]">
-                <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                        <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
-                        <Pie
-                            data={data}
-                            dataKey="value"
-                            nameKey="name"
-                            cx="50%"
-                            cy="50%"
-                            innerRadius={60}
-                            outerRadius={80}
-                            strokeWidth={2}
-                            stroke="var(--color-background)"
-                            paddingAngle={2}
-                        >
-                            {data.map((_, index) => (
-                                <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                            ))}
-                        </Pie>
-                        <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                    </PieChart>
-                </ResponsiveContainer>
-            </ChartContainer>
+          <div className="mt-4 space-y-4">
+            <div className="flex justify-center">
+              <ChartContainer config={chartConfig} className="h-[210px] w-[210px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                          <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
+                          <Pie
+                              data={data}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={56}
+                              outerRadius={78}
+                              strokeWidth={2}
+                              stroke="var(--color-background)"
+                              paddingAngle={2}
+                          >
+                              {data.map((_, index) => (
+                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              ))}
+                          </Pie>
+                      </PieChart>
+                  </ResponsiveContainer>
+              </ChartContainer>
+            </div>
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 px-2 pb-1">
+              {data.map((entry, index) => (
+                <div key={entry.name} className="flex items-center gap-2 text-xs text-zinc-300">
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                  />
+                  <span className="truncate max-w-[140px]">{entry.name}</span>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </CardContent>

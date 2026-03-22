@@ -231,8 +231,7 @@ def get_total(
     expenses = db.query(database.ExpenseDB).filter(database.ExpenseDB.vault_id == vault_id).all()
     logger.info(f"GET /totals - User {current_user.id} (Vault {vault_id}). Found {len(expenses)} rows.")
     if not expenses:
-        zero_ct = tenseal_to_raw_seal(ts.ckks_vector(ctx, [0.0]))
-        return {"totalCiphertext": base64.b64encode(zero_ct).decode('ascii')}
+        return {"totalCiphertext": None}
 
     total = None
     for exp in expenses:
@@ -247,8 +246,7 @@ def get_total(
             continue
             
     if total is None:
-        zero_ct = tenseal_to_raw_seal(ts.ckks_vector(ctx, [0.0]))
-        return {"totalCiphertext": base64.b64encode(zero_ct).decode('ascii')}
+        return {"totalCiphertext": None}
 
     raw_computed_seal = tenseal_to_raw_seal(total)
     return {"totalCiphertext": base64.b64encode(raw_computed_seal).decode('ascii')}
@@ -271,9 +269,6 @@ def get_totals_breakdown(
     result = {}
     if not expenses:
         return {}
-        
-    zero_ct_raw = tenseal_to_raw_seal(ts.ckks_vector(ctx, [0.0]))
-    zero_ct_b64 = base64.b64encode(zero_ct_raw).decode('ascii')
 
     for cat, exps in grouped.items():
         total = None
@@ -288,7 +283,7 @@ def get_totals_breakdown(
             except Exception:
                 continue
         if total is None:
-            result[cat] = zero_ct_b64
+            result[cat] = None
         else:
             raw_computed_seal = tenseal_to_raw_seal(total)
             result[cat] = base64.b64encode(raw_computed_seal).decode('ascii')

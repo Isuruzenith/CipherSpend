@@ -1,5 +1,3 @@
-import SEAL from 'node-seal';
-
 let seal: any;
 let context: any;
 let publicKey: any;
@@ -12,6 +10,7 @@ const SCALE = Math.pow(2, 40);
 
 export async function initSealBase(): Promise<void> {
   if (!seal) {
+    const { default: SEAL } = await import('node-seal');
     seal = await SEAL();
   }
 }
