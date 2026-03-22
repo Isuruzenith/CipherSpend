@@ -15,11 +15,17 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     steps:
+      - name: Validate RELEASE_PLEASE_TOKEN
+        run: |
+          if [ -z "${{ secrets.RELEASE_PLEASE_TOKEN }}" ]; then
+            echo "RELEASE_PLEASE_TOKEN is required."
+            echo "Create a PAT with repo scope and add it as repository secret RELEASE_PLEASE_TOKEN."
+            exit 1
+          fi
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          # Optional PAT can be stored as RELEASE_PLEASE_TOKEN.
-          # Falls back to GitHub-provided token if PAT is not set.
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN || github.token }}
+          # Use PAT to bypass GITHUB_TOKEN PR creation restrictions in some repos/orgs.
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           # Mixed frontend/backend repo: simple strategy avoids language-specific assumptions.
           release-type: simple
