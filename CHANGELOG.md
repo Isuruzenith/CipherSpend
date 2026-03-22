@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.5.0](https://github.com/Isuruzenith/CipherSpend/compare/v0.4.0...v0.5.0) (2026-03-22)
+
+
+### Features
+
+* Add currency management to expenses, including currency selection in forms and display in ledger, and implement currency symbol retrieval ([5c3a9aa](https://github.com/Isuruzenith/CipherSpend/commit/5c3a9aaf16fb7b208a38ee204cd63ee72adbb0a7))
+* add initial README with project overview, key features, tech stack, and setup instructions ([b51c42e](https://github.com/Isuruzenith/CipherSpend/commit/b51c42e86366de00bcb1b5509b26d524997df3fb))
+* restructure project with Docker support for frontend and backend; remove unused files and update configurations ([f86d1f9](https://github.com/Isuruzenith/CipherSpend/commit/f86d1f93e46a6c2d40243c9152464e3b305cb650))
+* update favicon and site manifest; add default currency preference ([36a7238](https://github.com/Isuruzenith/CipherSpend/commit/36a72384996fedeebeca57758eacec0163f862f1))
+
 ## [0.4.0](https://github.com/Isuruzenith/CipherSpend/compare/v0.3.0...v0.4.0) (2026-03-22)
 
 
