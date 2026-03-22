@@ -25,7 +25,9 @@ jobs:
       - uses: googleapis/release-please-action@v4
         id: release
         with:
-          # Use PAT to bypass GITHUB_TOKEN PR creation restrictions in some repos/orgs.
+
           token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
-          # Mixed frontend/backend repo: simple strategy avoids language-specific assumptions.
+
           release-type: simple
+        env:
+          FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
