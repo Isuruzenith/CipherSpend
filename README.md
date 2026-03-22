@@ -2,6 +2,61 @@
 
 CipherSpend is a privacy-first expense tracker that encrypts monetary values in the browser before sending data to the backend.
 
+## Homomorphic Encryption (HE) in CipherSpend
+
+CipherSpend uses **CKKS homomorphic encryption** (via Microsoft SEAL bindings) so the server can perform math on encrypted values without seeing raw amounts.
+
+### Why HE is used
+
+- Protects sensitive spending amounts from backend/database operators
+- Enables encrypted aggregation (for totals/category sums) without decrypting on the server
+- Keeps user-visible decryption in the client vault session
+
+### Trust boundary
+
+- **Browser (trusted by user):**
+  - Generates keys
+  - Encrypts amounts before upload
+  - Decrypts values for display (total, chart, ledger)
+- **Backend (untrusted for plaintext amounts):**
+  - Stores ciphertext
+  - Performs ciphertext aggregation
+  - Never requires plaintext amounts for core analytics flow
+
+### Crypto flow (practical)
+
+1. User registers/unlocks with passphrase.
+2. Browser initializes SEAL context and key material.
+3. Expense amount is encrypted client-side and uploaded as base64 ciphertext.
+4. Backend persists ciphertext and can sum ciphertext values homomorphically.
+5. Browser decrypts returned/row ciphertext for UI rendering.
+
+### Key handling model
+
+- Secret key is wrapped (encrypted) client-side using a passphrase-derived key (PBKDF2 + AES-GCM).
+- Backend stores wrapped key blob, not plaintext secret key.
+- Passphrase is not recoverable by backend.
+
+### CKKS details used currently
+
+- Scheme: `CKKS`
+- Poly modulus degree: `8192`
+- Coeff mod bit sizes: `[60, 40, 40, 60]`
+- Scale: `2^40`
+
+CKKS is approximate arithmetic, which is ideal for numeric analytics like totals and category spending.
+
+### Security assumptions and limitations
+
+- If client/browser is compromised at runtime, displayed plaintext can be exposed.
+- HE protects data at rest/in transit to server, not against malware on user device.
+- Current app does not perform FX conversion; totals should be interpreted per selected currency.
+- Timestamp/description/category are not HE-encrypted amounts and may still reveal metadata patterns.
+
+### Operational note
+
+The frontend includes robust local aggregation/decryption paths so dashboard totals/charts stay usable even if server-side aggregate ciphertext interop fails in specific runtime combinations.
+
 ## Key Features
 
 - Client-side encryption for expense amounts (`node-seal` / WASM)
