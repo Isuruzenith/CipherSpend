@@ -7,8 +7,6 @@ __pycache__/
 *.pyo
 .venv/
 venv/
-project.md
-currentstatus.md
 .agent/MEMORY.md
 
 # Node / Frontend

@@ -1,8 +1,10 @@
 fastapi
 uvicorn
 tenseal
+numpy
 sqlalchemy
 pydantic
+email-validator
 passlib[bcrypt]
 python-jose
 python-multipart

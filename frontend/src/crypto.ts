@@ -11,7 +11,11 @@ const SCALE = Math.pow(2, 40);
 export async function initSealBase(): Promise<void> {
   if (!seal) {
     const { default: SEAL } = await import('node-seal');
-    seal = await SEAL();
+    const publicBase = import.meta.env.BASE_URL ?? '/';
+    seal = await SEAL({
+      locateFile: (file: string) =>
+        file.endsWith('.wasm') ? `${publicBase}${file}` : file,
+    });
   }
 }
 
