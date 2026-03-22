@@ -37,3 +37,52 @@
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-muted);
 }
+
+@keyframes flowMove {
+  0% {
+    transform: translateX(0);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes dotPulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(20, 184, 166, 0.3);
+    opacity: 0.75;
+  }
+  50% {
+    box-shadow: 0 0 0 8px rgba(20, 184, 166, 0);
+    opacity: 1;
+  }
+}
+
+@layer components {
+  .flow-node {
+    @apply flex items-start gap-3 rounded-lg border border-zinc-800 bg-zinc-900/70 p-3;
+  }
+
+  .flow-dot {
+    @apply mt-1.5 h-2.5 w-2.5 rounded-full bg-teal-400;
+    animation: dotPulse 1.8s ease-in-out infinite;
+  }
+
+  .flow-track {
+    @apply relative h-1.5 rounded-full border border-zinc-800 bg-zinc-900;
+  }
+
+  .flow-packet {
+    @apply absolute left-0 top-1/2 h-2 w-12 -translate-y-1/2 rounded-full bg-gradient-to-r from-teal-500/30 via-teal-400 to-teal-500/30;
+    animation: flowMove 2.2s linear infinite;
+  }
+}
