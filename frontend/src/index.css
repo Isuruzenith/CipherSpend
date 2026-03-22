@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: #0a0a0a;
+  --color-surface: #171717;
+  --color-surfaceHighlight: #262626;
+  --color-accent: #4ade80;
+  --color-accentHover: #22c55e;
+  --color-muted: #a3a3a3;
+  
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-mono: "Fira Code", Courier, monospace;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: #e5e7eb; /* Tailwind text-gray-200 */
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Custom scrollbar for cyberpunk feel */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-background);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-surfaceHighlight);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-muted);
+}

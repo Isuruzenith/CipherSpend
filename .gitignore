@@ -10,3 +10,12 @@ venv/
 project.md
 currentstatus.md
 .agent/MEMORY.md
+
+# Node / Frontend
+node_modules/
+dist/
+.env
+
+# Cloud Ledger Database
+*.db
+cloud_ledger.db
