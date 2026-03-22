@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/Isuruzenith/CipherSpend/compare/v0.3.0...v0.4.0) (2026-03-22)
+
+
+### Features
+
+* add soft delete, expense editing, category management, and key … ([30ca0e5](https://github.com/Isuruzenith/CipherSpend/commit/30ca0e5d592d81e95520ffe004a7538a72e1b944))
+* add soft delete, expense editing, category management, and key rotation features. ([7454ed4](https://github.com/Isuruzenith/CipherSpend/commit/7454ed4e8229bf44b8bc5fa4837c5581ab9f5a62))
+
 ## [0.3.0](https://github.com/Isuruzenith/CipherSpend/compare/v0.2.0...v0.3.0) (2026-03-22)
 
 
