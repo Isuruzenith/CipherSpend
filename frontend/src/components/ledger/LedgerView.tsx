@@ -1,6 +1,6 @@
 import React from 'react';
 import type { ExpenseRecord } from './AddExpenseForm';
-import { FileLock2 } from 'lucide-react';
+import { FileLock2, Pencil, Trash2 } from 'lucide-react';
 import { useCrypto } from '../../context/CryptoContext';
 import {
   Table,
@@ -11,8 +11,13 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 
-export const LedgerView: React.FC<{ expenses: ExpenseRecord[] }> = ({ expenses }) => {
+export const LedgerView: React.FC<{
+  expenses: ExpenseRecord[];
+  onEdit: (expense: ExpenseRecord) => void;
+  onDelete: (expenseId: string) => void;
+}> = ({ expenses, onEdit, onDelete }) => {
   const { isCryptoReady, decryptAmount } = useCrypto();
 
   if (expenses.length === 0) {
@@ -36,6 +41,7 @@ export const LedgerView: React.FC<{ expenses: ExpenseRecord[] }> = ({ expenses }
             <TableHead className="text-zinc-400 font-medium">Category</TableHead>
             <TableHead className="text-zinc-400 font-medium">Date</TableHead>
             <TableHead className="text-right text-zinc-400 font-medium">Amount</TableHead>
+            <TableHead className="text-right text-zinc-400 font-medium">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -73,6 +79,28 @@ export const LedgerView: React.FC<{ expenses: ExpenseRecord[] }> = ({ expenses }
                     <Badge variant="secondary" className="bg-teal-500/10 hover:bg-teal-500/10 text-teal-400 border border-teal-500/20 text-[9px] uppercase font-semibold tracking-wider px-1.5 py-0 shadow-none">
                       Encrypted until viewed
                     </Badge>
+                  </div>
+                </TableCell>
+                <TableCell className="text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => onEdit(exp)}
+                      className="h-8 w-8 border-zinc-700 bg-zinc-900 text-zinc-200 hover:text-zinc-100"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="outline"
+                      onClick={() => onDelete(exp.id)}
+                      className="h-8 w-8 border-zinc-700 bg-zinc-900 text-rose-300 hover:text-rose-200"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
                 </TableCell>
               </TableRow>

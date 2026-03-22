@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useCrypto } from '../../context/CryptoContext';
 import { ShieldPlus, Plus } from 'lucide-react';
 import {
@@ -29,13 +29,63 @@ export interface ExpenseRecord {
   timestamp: string;
 }
 
-export const AddExpenseForm: React.FC<{ onAdd: (expense: ExpenseRecord) => void }> = ({ onAdd }) => {
-  const { isCryptoReady, encryptAmount, token } = useCrypto();
+const DEFAULT_CATEGORIES = ['Utilities', 'Food', 'Transportation', 'Travel', 'Education', 'Others'];
+const CUSTOM_CATEGORIES_STORAGE_KEY = 'cipherspend.customCategories';
+
+export const AddExpenseForm: React.FC<{
+  onAdd: (expense: ExpenseRecord) => void;
+  editExpense?: ExpenseRecord | null;
+  onCancelEdit?: () => void;
+}> = ({ onAdd, editExpense = null, onCancelEdit }) => {
+  const { isCryptoReady, encryptAmount, decryptAmount, token } = useCrypto();
   const [desc, setDesc] = useState('');
   const [amount, setAmount] = useState('');
-  const [category, setCategory] = useState('General');
+  const [category, setCategory] = useState(DEFAULT_CATEGORIES[0]);
+  const [customCategories, setCustomCategories] = useState<string[]>([]);
+  const [newCategory, setNewCategory] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [open, setOpen] = useState(false);
+  const categories = useMemo(() => {
+    if (editExpense && !DEFAULT_CATEGORIES.includes(editExpense.category) && !customCategories.includes(editExpense.category)) {
+      return [...DEFAULT_CATEGORIES, ...customCategories, editExpense.category];
+    }
+    return [...DEFAULT_CATEGORIES, ...customCategories];
+  }, [customCategories, editExpense]);
+
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(CUSTOM_CATEGORIES_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return;
+      const normalized = parsed.filter((c): c is string => typeof c === 'string' && c.trim().length > 0);
+      setCustomCategories(normalized);
+    } catch (error) {
+      console.warn('Could not load custom categories from local storage.', error);
+    }
+  }, []);
+
+  const persistCustomCategories = (next: string[]) => {
+    setCustomCategories(next);
+    window.localStorage.setItem(CUSTOM_CATEGORIES_STORAGE_KEY, JSON.stringify(next));
+  };
+
+  const handleAddCategory = () => {
+    const normalized = newCategory.trim();
+    if (!normalized) return;
+    const alreadyExists = [...DEFAULT_CATEGORIES, ...customCategories].some(
+      (existing) => existing.toLowerCase() === normalized.toLowerCase()
+    );
+    if (alreadyExists) {
+      toast.error('Category already exists');
+      return;
+    }
+    const next = [...customCategories, normalized];
+    persistCustomCategories(next);
+    setCategory(normalized);
+    setNewCategory('');
+    toast.success('Category added');
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,28 +102,39 @@ export const AddExpenseForm: React.FC<{ onAdd: (expense: ExpenseRecord) => void 
         try {
             const ct = encryptAmount(val);
             const newExp = {
-              id: Math.random().toString(36).substr(2, 9),
+              id: editExpense?.id ?? Math.random().toString(36).substr(2, 9),
               description: desc,
               category,
               amountCiphertext: ct,
-              timestamp: new Date().toISOString()
+              timestamp: editExpense?.timestamp ?? new Date().toISOString()
             };
 
-            fetch('http://localhost:8000/api/expenses', {
-              method: 'POST',
+            fetch(
+              editExpense
+                ? `http://localhost:8000/api/expenses/${editExpense.id}`
+                : 'http://localhost:8000/api/expenses',
+              {
+              method: editExpense ? 'PUT' : 'POST',
               headers: { 
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${token}`
               },
               body: JSON.stringify(newExp)
             })
-              .then(res => res.json())
+              .then(async (res) => {
+                if (!res.ok) {
+                  throw new Error(`Save failed (${res.status})`);
+                }
+                return res.json();
+              })
               .then(data => {
                 onAdd(data);
-                toast.success('Expense encrypted and stored!');
+                toast.success(editExpense ? 'Expense updated!' : 'Expense encrypted and stored!');
                 setDesc('');
                 setAmount('');
+                setCategory(DEFAULT_CATEGORIES[0]);
                 setOpen(false);
+                if (onCancelEdit) onCancelEdit();
               })
               .catch(err => {
                  console.error(err);
@@ -88,8 +149,31 @@ export const AddExpenseForm: React.FC<{ onAdd: (expense: ExpenseRecord) => void 
     }, 50);
   };
 
+  useEffect(() => {
+    if (!editExpense) return;
+    setDesc(editExpense.description);
+    setCategory(editExpense.category);
+    setOpen(true);
+    try {
+      const val = decryptAmount(editExpense.amountCiphertext);
+      if (Number.isFinite(val)) {
+        setAmount(val.toFixed(2));
+      }
+    } catch {
+      setAmount('');
+    }
+  }, [editExpense, decryptAmount]);
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen);
+        if (!nextOpen && editExpense && onCancelEdit) {
+          onCancelEdit();
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button className="bg-teal-500 hover:bg-teal-600 text-zinc-950 font-semibold gap-2">
           <Plus size={16} />
@@ -102,10 +186,10 @@ export const AddExpenseForm: React.FC<{ onAdd: (expense: ExpenseRecord) => void 
             <div className="bg-teal-500/10 p-2 rounded-lg text-teal-400 border border-teal-500/20">
               <ShieldPlus size={20} />
             </div>
-            <DialogTitle className="text-xl">Secure New Entry</DialogTitle>
+             <DialogTitle className="text-xl">Secure New Entry</DialogTitle>
           </div>
           <DialogDescription className="text-zinc-400">
-            Amounts are encrypted locally via CKKS before leaving your browser.
+             {editExpense ? 'Update the expense, then re-encrypt before sync.' : 'Amounts are encrypted locally via CKKS before leaving your browser.'}
           </DialogDescription>
         </DialogHeader>
         
@@ -131,12 +215,27 @@ export const AddExpenseForm: React.FC<{ onAdd: (expense: ExpenseRecord) => void 
                   <SelectValue placeholder="Category" />
                 </SelectTrigger>
                 <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
-                  <SelectItem value="General">General</SelectItem>
-                  <SelectItem value="Cloud Infrastructure">Cloud Infrastructure</SelectItem>
-                  <SelectItem value="Software">Software</SelectItem>
-                  <SelectItem value="Food">Food</SelectItem>
+                  {categories.map((cat) => (
+                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
+              <div className="flex items-center gap-2 mt-2">
+                <Input
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  className="bg-zinc-900 border-zinc-800 text-zinc-100 h-9"
+                  placeholder="Add category"
+                />
+                <Button
+                  type="button"
+                  onClick={handleAddCategory}
+                  variant="outline"
+                  className="h-9 border-zinc-700 bg-zinc-900 text-zinc-200 hover:text-zinc-100"
+                >
+                  Add
+                </Button>
+              </div>
             </div>
             
             <div className="space-y-2">
@@ -157,15 +256,30 @@ export const AddExpenseForm: React.FC<{ onAdd: (expense: ExpenseRecord) => void 
             </div>
           </div>
           
-          <Button 
-            type="submit"
-            disabled={!isCryptoReady || isSubmitting}
-            className="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-bold"
-          >
-            {isSubmitting ? "Encrypting..." : "Encrypt & Store"}
-          </Button>
-        </form>
-      </DialogContent>
-    </Dialog>
+            <div className="flex gap-2">
+              {editExpense && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-1/3 border-zinc-700 bg-zinc-900 text-zinc-200 hover:text-zinc-100"
+                  onClick={() => {
+                    setOpen(false);
+                    if (onCancelEdit) onCancelEdit();
+                  }}
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button 
+                type="submit"
+                disabled={!isCryptoReady || isSubmitting}
+                className={`${editExpense ? 'w-2/3' : 'w-full'} bg-zinc-100 hover:bg-white text-zinc-950 font-bold`}
+              >
+                {isSubmitting ? "Encrypting..." : editExpense ? "Encrypt & Update" : "Encrypt & Store"}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
   );
 }

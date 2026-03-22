@@ -50,3 +50,9 @@ class ExpenseResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+class ExpenseUpdate(BaseModel):
+    description: str
+    category: str
+    timestamp: str
+    amountCiphertext: str

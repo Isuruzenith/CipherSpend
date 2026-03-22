@@ -220,6 +220,53 @@ def get_expenses(
         ) for e in expenses
     ]
 
+@app.put("/api/expenses/{expense_id}", response_model=schemas.ExpenseResponse)
+def update_expense(
+    expense_id: str,
+    payload: schemas.ExpenseUpdate,
+    db: Session = Depends(get_db),
+    current_user: database.UserDB = Depends(get_current_user)
+):
+    vault_id = current_user.vault_id or current_user.id
+    expense = db.query(database.ExpenseDB).filter(
+        database.ExpenseDB.id == expense_id,
+        database.ExpenseDB.vault_id == vault_id
+    ).first()
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    expense.description = payload.description
+    expense.category = payload.category
+    expense.timestamp = payload.timestamp
+    expense.ciphertext = payload.amountCiphertext
+    db.commit()
+    db.refresh(expense)
+    return schemas.ExpenseResponse(
+        id=expense.id,
+        description=expense.description,
+        category=expense.category,
+        timestamp=expense.timestamp,
+        amountCiphertext=expense.ciphertext
+    )
+
+@app.delete("/api/expenses/{expense_id}")
+def delete_expense(
+    expense_id: str,
+    db: Session = Depends(get_db),
+    current_user: database.UserDB = Depends(get_current_user)
+):
+    vault_id = current_user.vault_id or current_user.id
+    expense = db.query(database.ExpenseDB).filter(
+        database.ExpenseDB.id == expense_id,
+        database.ExpenseDB.vault_id == vault_id
+    ).first()
+    if not expense:
+        raise HTTPException(status_code=404, detail="Expense not found")
+
+    db.delete(expense)
+    db.commit()
+    return {"status": "deleted", "id": expense_id}
+
 @app.get("/api/expenses/total")
 def get_total(
     db: Session = Depends(get_db),

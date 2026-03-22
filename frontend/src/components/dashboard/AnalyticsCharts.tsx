@@ -13,7 +13,17 @@ interface CategoryData {
   value: number;
 }
 
-const COLORS = ['#4ade80', '#2dd4bf', '#818cf8', '#f472b6', '#fbbf24', '#a78bfa'];
+const toColorKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+const getCategoryColor = (name: string) => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i += 1) {
+    hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  }
+  const hue = hash % 360;
+  const saturation = 70 + (hash % 12);
+  const lightness = 52 + (hash % 8);
+  return `hsl(${hue} ${saturation}% ${lightness}%)`;
+};
 const mapCategoryTotalsToChartData = (byCategory: Record<string, number>): CategoryData[] =>
   Object.entries(byCategory)
     .filter(([, value]) => Number.isFinite(value) && value > 0)
@@ -83,8 +93,8 @@ export const AnalyticsCharts: React.FC<{ expensesCount: number }> = ({ expensesC
 
   const chartConfig = useMemo(() => {
     const config: Record<string, any> = {};
-    data.forEach((d, i) => {
-        config[d.name] = { label: d.name, color: COLORS[i % COLORS.length] };
+    data.forEach((d) => {
+        config[toColorKey(d.name)] = { label: d.name, color: getCategoryColor(d.name) };
     });
     return config;
   }, [data]);
@@ -110,15 +120,15 @@ export const AnalyticsCharts: React.FC<{ expensesCount: number }> = ({ expensesC
             )}
         </div>
       </CardHeader>
-      <CardContent className="pb-4">
+      <CardContent className="pb-5">
         {data.length === 0 ? (
           <div className="h-[250px] flex items-center justify-center text-zinc-600 text-sm">
             {isSyncing ? "Homomorphically aggregating..." : "No data to display"}
           </div>
         ) : (
-          <div className="mt-4 space-y-4">
+          <div className="mt-5 space-y-6">
             <div className="flex justify-center">
-              <ChartContainer config={chartConfig} className="h-[210px] w-[210px]">
+              <ChartContainer config={chartConfig} className="h-[340px] w-[340px] max-w-full">
                   <ResponsiveContainer width="100%" height="100%">
                       <PieChart>
                           <ChartTooltip cursor={false} content={<ChartTooltipContent hideLabel />} />
@@ -128,28 +138,28 @@ export const AnalyticsCharts: React.FC<{ expensesCount: number }> = ({ expensesC
                               nameKey="name"
                               cx="50%"
                               cy="50%"
-                              innerRadius={56}
-                              outerRadius={78}
+                              innerRadius={88}
+                              outerRadius={132}
                               strokeWidth={2}
                               stroke="var(--color-background)"
                               paddingAngle={2}
                           >
-                              {data.map((_, index) => (
-                                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                              {data.map((entry) => (
+                                  <Cell key={`cell-${entry.name}`} fill={getCategoryColor(entry.name)} />
                               ))}
                           </Pie>
                       </PieChart>
                   </ResponsiveContainer>
               </ChartContainer>
             </div>
-            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 px-2 pb-1">
-              {data.map((entry, index) => (
-                <div key={entry.name} className="flex items-center gap-2 text-xs text-zinc-300">
+            <div className="flex flex-wrap justify-center gap-x-5 gap-y-2 px-2 pb-2">
+              {data.map((entry) => (
+                <div key={entry.name} className="flex items-center gap-2 text-sm text-zinc-300">
                   <span
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
+                    className="h-3 w-3 rounded-full"
+                    style={{ backgroundColor: getCategoryColor(entry.name) }}
                   />
-                  <span className="truncate max-w-[140px]">{entry.name}</span>
+                  <span className="truncate max-w-[180px]">{entry.name}</span>
                 </div>
               ))}
             </div>

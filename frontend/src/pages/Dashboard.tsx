@@ -4,6 +4,7 @@ import type { ExpenseRecord } from '@/components/ledger/AddExpenseForm';
 import { useCrypto } from '@/context/CryptoContext';
 import { Button } from '@/components/ui/button';
 import { LogOut, ShieldCheck } from 'lucide-react';
+import { toast } from 'sonner';
 
 const TotalDisplay = lazy(() => import('@/components/dashboard/TotalDisplay').then((m) => ({ default: m.TotalDisplay })));
 const AnalyticsCharts = lazy(() => import('@/components/dashboard/AnalyticsCharts').then((m) => ({ default: m.AnalyticsCharts })));
@@ -12,6 +13,7 @@ const LedgerView = lazy(() => import('@/components/ledger/LedgerView').then((m) 
 
 export default function Dashboard() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [isChartVisible, setIsChartVisible] = useState(false);
   const { token, logout, email } = useCrypto();
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
@@ -48,7 +50,32 @@ export default function Dashboard() {
   }, [isChartVisible]);
 
   const handleAddExpense = (exp: ExpenseRecord) => {
+    if (editingExpenseId) {
+      setExpenses((prev) => prev.map((item) => (item.id === exp.id ? exp : item)));
+      setEditingExpenseId(null);
+      return;
+    }
     setExpenses(prev => [...prev, exp]);
+  };
+
+  const handleEditExpense = (expense: ExpenseRecord) => {
+    setEditingExpenseId(expense.id);
+  };
+
+  const handleDeleteExpense = async (expenseId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`http://localhost:8000/api/expenses/${expenseId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+      setExpenses((prev) => prev.filter((item) => item.id !== expenseId));
+      toast.success('Expense deleted');
+    } catch (error) {
+      console.error(error);
+      toast.error('Failed to delete expense');
+    }
   };
 
   return (
@@ -63,7 +90,11 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-4">
           <Suspense fallback={<div className="h-10 w-32 rounded-md bg-zinc-900 border border-zinc-800" />}>
-            <AddExpenseForm onAdd={handleAddExpense} />
+            <AddExpenseForm
+              onAdd={handleAddExpense}
+              editExpense={expenses.find((item) => item.id === editingExpenseId) ?? null}
+              onCancelEdit={() => setEditingExpenseId(null)}
+            />
           </Suspense>
           <Button variant="outline" onClick={logout} className="border-zinc-800 text-zinc-300 hover:text-zinc-50 bg-zinc-950">
             <LogOut className="w-4 h-4 mr-2" />
@@ -72,18 +103,18 @@ export default function Dashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
-        <div className="lg:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10 items-start">
+        <div>
           <Suspense fallback={<div className="h-[220px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />}>
             <TotalDisplay expensesCount={expenses.length} />
           </Suspense>
         </div>
-        <div className="lg:col-span-1" ref={chartContainerRef}>
-          <Suspense fallback={<div className="h-[320px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />}>
+        <div ref={chartContainerRef}>
+          <Suspense fallback={<div className="h-[460px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />}>
             {isChartVisible ? (
               <AnalyticsCharts expensesCount={expenses.length} />
             ) : (
-              <div className="h-[320px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />
+              <div className="h-[460px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />
             )}
           </Suspense>
         </div>
@@ -96,7 +127,7 @@ export default function Dashboard() {
             <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">{expenses.length} records</span>
           </h3>
           <Suspense fallback={<div className="h-[260px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />}>
-            <LedgerView expenses={expenses} />
+            <LedgerView expenses={expenses} onEdit={handleEditExpense} onDelete={handleDeleteExpense} />
           </Suspense>
         </div>
       </div>
