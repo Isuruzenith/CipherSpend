@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/Isuruzenith/CipherSpend/compare/v0.2.0...v0.3.0) (2026-03-22)
+
+
+### Features
+
+* Enhance key management with passphrase protection, add expense … ([48ca82b](https://github.com/Isuruzenith/CipherSpend/commit/48ca82bc4b67fd036d6f95eee08d10b57268b9ad))
+* Enhance key management with passphrase protection, add expense categories, and improve database schema ([326c28c](https://github.com/Isuruzenith/CipherSpend/commit/326c28cc25394bfb9152f8f59b86050106e39020))
+
 ## [0.2.0](https://github.com/Isuruzenith/CipherSpend/compare/v0.1.0...v0.2.0) (2026-03-15)
 
 
