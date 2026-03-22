@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from 'sonner';
 import { SUPPORTED_CURRENCIES, type SupportedCurrency, getCurrencySymbol } from '@/lib/currency';
+import { getDefaultCurrency } from '@/lib/preferences';
 
 export interface ExpenseRecord {
   id: string;
@@ -67,6 +68,15 @@ export const AddExpenseForm: React.FC<{
       console.warn('Could not load custom categories from local storage.', error);
     }
   }, []);
+
+  useEffect(() => {
+    if (editExpense) return;
+    try {
+      setCurrency(getDefaultCurrency());
+    } catch {
+      setCurrency('LKR');
+    }
+  }, [editExpense]);
 
   const persistCustomCategories = (next: string[]) => {
     setCustomCategories(next);
@@ -137,7 +147,11 @@ export const AddExpenseForm: React.FC<{
                 setDesc('');
                 setAmount('');
                 setCategory(DEFAULT_CATEGORIES[0]);
-                setCurrency('LKR');
+                try {
+                  setCurrency(getDefaultCurrency());
+                } catch {
+                  setCurrency('LKR');
+                }
                 setOpen(false);
                 if (onCancelEdit) onCancelEdit();
               })

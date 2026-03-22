@@ -14,6 +14,7 @@ import {
 import { LogOut, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { SUPPORTED_CURRENCIES, type SupportedCurrency } from '@/lib/currency';
+import { getDefaultCurrency } from '@/lib/preferences';
 
 const TotalDisplay = lazy(() => import('@/components/dashboard/TotalDisplay').then((m) => ({ default: m.TotalDisplay })));
 const AnalyticsCharts = lazy(() => import('@/components/dashboard/AnalyticsCharts').then((m) => ({ default: m.AnalyticsCharts })));
@@ -44,6 +45,14 @@ export default function Dashboard() {
       .then(data => setExpenses(data))
       .catch(err => console.error("Could not fetch ledger.", err));
   }, [token]);
+
+  useEffect(() => {
+    try {
+      setSelectedCurrency(getDefaultCurrency());
+    } catch {
+      setSelectedCurrency('LKR');
+    }
+  }, []);
 
   useEffect(() => {
     if (isChartVisible) return;

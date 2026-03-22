@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { MainLayout } from '@/components/layout/MainLayout';
 import { useCrypto } from '@/context/CryptoContext';
@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,13 +17,38 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from 'sonner';
-import { KeyRound, ShieldAlert, MonitorSmartphone, DownloadCloud, ArrowLeft } from 'lucide-react';
+import { KeyRound, ShieldAlert, DownloadCloud, ArrowLeft } from 'lucide-react';
+import { SUPPORTED_CURRENCIES, type SupportedCurrency } from '@/lib/currency';
+import { getDefaultCurrency, setDefaultCurrency } from '@/lib/preferences';
 
 export default function Settings() {
   const { rotatePassphrase, exportWrappedKey, token, decryptAmount } = useCrypto();
   const [newPassphrase, setNewPassphrase] = useState('');
   const [isRotating, setIsRotating] = useState(false);
+  const [defaultCurrency, setDefaultCurrencyState] = useState<SupportedCurrency>('LKR');
+
+  useEffect(() => {
+    try {
+      setDefaultCurrencyState(getDefaultCurrency());
+    } catch {
+      setDefaultCurrencyState('LKR');
+    }
+  }, []);
+
+  const handleDefaultCurrencyChange = (value: string) => {
+    const next = value as SupportedCurrency;
+    setDefaultCurrencyState(next);
+    setDefaultCurrency(next);
+    toast.success(`Default currency set to ${next}`);
+  };
 
   const handleRotateKey = async () => {
     if (!newPassphrase) return;
@@ -89,7 +113,7 @@ export default function Settings() {
     <MainLayout>
       <div className="max-w-4xl mx-auto space-y-8">
         <div>
-          <h2 className="text-2xl font-bold text-zinc-50 tracking-tight">Vault Settings & Polish</h2>
+          <h2 className="text-2xl font-bold text-zinc-50 tracking-tight">Vault Settings</h2>
           <p className="text-zinc-400 text-sm">Manage advanced security, cryptographic keys, and edge nodes.</p>
           <div className="mt-4">
             <Button asChild variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-200 hover:text-zinc-100">
@@ -104,7 +128,6 @@ export default function Settings() {
         <Separator className="bg-zinc-800" />
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-          {/* Key Management */}
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-white flex items-center gap-2">
               <KeyRound className="text-teal-500 w-5 h-5" />
@@ -165,51 +188,44 @@ export default function Settings() {
             </div>
           </div>
 
-          {/* Preferences & Polish */}
           <div className="space-y-6">
             <h3 className="text-lg font-medium text-white flex items-center gap-2">
-              <MonitorSmartphone className="text-zinc-400 w-5 h-5" />
-              Preferences & Trust Signals
+              <KeyRound className="text-zinc-400 w-5 h-5" />
+              Preferences
             </h3>
 
             <div className="space-y-4 bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
-              <div className="flex items-center justify-between">
-                 <div className="space-y-1">
-                    <Label className="text-zinc-300">Force Absolute Dark Mode</Label>
-                    <p className="text-[11px] text-zinc-500">Privacy maximalist strict UI (default).</p>
-                 </div>
-                 <Switch checked={true} disabled />
+              <div className="space-y-1">
+                <Label className="text-zinc-300">Default Currency</Label>
+                <p className="text-xs text-zinc-500">
+                  Used as the default selection when adding new expenses and as initial dashboard currency filter.
+                </p>
               </div>
-
-              <div className="flex items-center justify-between pt-4 border-t border-zinc-800/50">
-                 <div className="space-y-1">
-                    <Label className="text-zinc-300 text-teal-400">Global Trust Indicators</Label>
-                    <p className="text-[11px] text-zinc-500">Show lock icons and "Encrypted" badges next to raw ciphertexts in Ledger.</p>
-                 </div>
-                 <Switch checked={true} disabled />
-              </div>
+              <Select value={defaultCurrency} onValueChange={handleDefaultCurrencyChange}>
+                <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-100">
+                  <SelectValue placeholder="Default currency" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
+                  {SUPPORTED_CURRENCIES.map((currency) => (
+                    <SelectItem key={currency} value={currency}>{currency}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Preparation for Phase 5 */}
-            <div className="space-y-4 bg-zinc-950 border border-dashed border-zinc-800 p-5 rounded-xl text-center">
-              <div className="w-10 h-10 bg-zinc-900 rounded flex items-center justify-center mx-auto mb-3">
-                 <MonitorSmartphone className="text-zinc-600 w-5 h-5" />
+            <div className="space-y-4 bg-zinc-900 border border-zinc-800 p-5 rounded-xl">
+              <div className="space-y-1">
+                <Label className="text-zinc-300">Data Export</Label>
+                <p className="text-xs text-zinc-500">
+                  Download decrypted CSV directly from browser memory without sending plaintext to the server.
+                </p>
               </div>
-              <Label className="text-zinc-400 block pb-1">Link New Device / Household</Label>
-              <p className="text-xs text-zinc-600">Scan QR Code to securely transfer wrapped SK to a secondary node. <em>(Coming soon)</em></p>
+              <Button onClick={handleCSVExport} variant="outline" className="border-teal-500/20 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 w-auto gap-2">
+                <DownloadCloud size={16} />
+                Export Decrypted CSV Locally
+              </Button>
             </div>
           </div>
-        </div>
-
-        <Separator className="bg-zinc-800" />
-        
-        {/* Phase 5 export */}
-        <div>
-           <Button onClick={handleCSVExport} variant="outline" className="border-teal-500/20 text-teal-400 bg-teal-500/10 hover:bg-teal-500/20 w-auto gap-2">
-              <DownloadCloud size={16} />
-              Export Decrypted CSV Locally
-           </Button>
-           <p className="text-xs text-zinc-500 mt-2">Downloads a CSV file directly from browser memory without sending plaintext to the server.</p>
         </div>
       </div>
     </MainLayout>

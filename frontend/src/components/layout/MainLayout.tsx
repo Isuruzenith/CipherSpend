@@ -14,9 +14,9 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
              <Link to="/dashboard" className="flex items-center gap-3 group">
-               <div className="w-8 h-8 bg-teal-500 rounded flex items-center justify-center text-zinc-950 font-bold text-xl shadow-[0_0_15px_rgba(20,184,166,0.3)]">C</div>
-               <span className="font-bold text-lg tracking-tight text-white group-hover:text-teal-300 transition-colors">CipherSpend</span>
-             </Link>
+               <img src="/favicon-32x32.png" alt="CipherSpend logo" className="w-8 h-8 rounded-sm" />
+                <span className="font-bold text-lg tracking-tight text-white group-hover:text-teal-300 transition-colors">CipherSpend</span>
+              </Link>
           </div>
           <div className="flex items-center gap-3 text-sm">
              {!isSettingsPage && (
