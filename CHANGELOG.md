@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.2.0](https://github.com/Isuruzenith/CipherSpend/compare/v1.1.0...v1.2.0) (2026-03-23)
+
+
+### Features
+
+* enhance SignUp page with animated background, key generation progress, and improved passphrase validation ([0ea87e1](https://github.com/Isuruzenith/CipherSpend/commit/0ea87e1eb8c6e070618bf7cdaf6d7265cef5b21c))
+
+
+### Bug Fixes
+
+* clean up empty code change sections in the changes log ([7dc5e65](https://github.com/Isuruzenith/CipherSpend/commit/7dc5e65a29c3df9d3e4ea2b17fc3c0151f3fecec))
+
 ## [1.1.0](https://github.com/Isuruzenith/CipherSpend/compare/v1.0.0...v1.1.0) (2026-03-22)
 
 
