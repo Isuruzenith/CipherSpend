@@ -2,17 +2,24 @@ import React from 'react';
 import type { ExpenseRecord } from './AddExpenseForm';
 import { FileLock2, Pencil, Trash2 } from 'lucide-react';
 import { useCrypto } from '../../context/CryptoContext';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { getCurrencySymbol } from '@/lib/currency';
+
+/* ── Category colour — same hash fn as AnalyticsCharts ── */
+const getCategoryColor = (name: string): string => {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return `hsl(${hash % 360} ${65 + (hash % 12)}% ${55 + (hash % 8)}%)`;
+};
+
+const iconBtn = (color: 'teal' | 'red'): React.CSSProperties => ({
+  width: 30, height: 30, borderRadius: 7,
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  background: color === 'teal' ? 'rgba(20,184,166,0.06)' : 'rgba(239,68,68,0.06)',
+  border: `1px solid ${color === 'teal' ? 'rgba(20,184,166,0.18)' : 'rgba(239,68,68,0.18)'}`,
+  cursor: 'pointer', transition: 'background .15s, border-color .15s',
+  color: color === 'teal' ? '#5eead4' : '#f87171',
+  flexShrink: 0,
+});
 
 export const LedgerView: React.FC<{
   expenses: ExpenseRecord[];
@@ -21,98 +28,202 @@ export const LedgerView: React.FC<{
 }> = ({ expenses, onEdit, onDelete }) => {
   const { isCryptoReady, decryptAmount } = useCrypto();
 
+  /* ── Empty state ── */
   if (expenses.length === 0) {
     return (
-      <div className="p-12 text-center rounded-xl border border-dashed border-zinc-800 bg-zinc-900/40 text-zinc-500 flex flex-col items-center gap-3">
-         <FileLock2 size={32} className="opacity-40" />
-         <p className="font-medium text-sm">No encrypted entries yet in this session.</p>
+      <div style={{
+        padding: '48px 24px', textAlign: 'center',
+        borderRadius: 14,
+        border: '1px dashed rgba(255,255,255,0.08)',
+        background: 'rgba(255,255,255,0.01)',
+        display: 'flex', flexDirection: 'column',
+        alignItems: 'center', gap: 12,
+        fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
+      }}>
+        <div style={{
+          width: 44, height: 44, borderRadius: 10,
+          background: 'rgba(20,184,166,0.06)',
+          border: '1px solid rgba(20,184,166,0.14)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <FileLock2 size={20} color="#3f3f46" />
+        </div>
+        <p style={{ fontSize: 13, color: '#3f3f46', margin: 0, fontFamily: '"IBM Plex Mono", monospace' }}>
+          No encrypted entries in this session.
+        </p>
       </div>
-    )
+    );
   }
 
-  // Sort by latest first
-  const sorted = [...expenses].sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  const sorted = [...expenses].sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+
+  /* ── Col widths ── */
+  const COL = { desc: '28%', cat: '18%', cur: '8%', date: '16%', amt: '18%', act: '12%' };
 
   return (
-    <div className="rounded-md border border-zinc-800 bg-zinc-950/50 overflow-hidden shadow-sm">
-      <Table>
-        <TableHeader className="bg-zinc-900/80">
-          <TableRow className="border-zinc-800 hover:bg-transparent">
-            <TableHead className="text-zinc-400 font-medium">Description</TableHead>
-            <TableHead className="text-zinc-400 font-medium">Category</TableHead>
-            <TableHead className="text-zinc-400 font-medium">Currency</TableHead>
-            <TableHead className="text-zinc-400 font-medium">Date</TableHead>
-            <TableHead className="text-right text-zinc-400 font-medium">Amount</TableHead>
-            <TableHead className="text-right text-zinc-400 font-medium">Actions</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {sorted.map((exp) => {
-            let decryptedVal = null;
-            try {
-              if (isCryptoReady) decryptedVal = decryptAmount(exp.amountCiphertext);
-            } catch (e) {
-              console.error(e);
-            }
+    <div style={{
+      borderRadius: 14,
+      border: '1px solid rgba(255,255,255,0.07)',
+      overflow: 'hidden',
+      fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
+    }}>
+      {/* ── Header row ── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: `${COL.desc} ${COL.cat} ${COL.cur} ${COL.date} ${COL.amt} ${COL.act}`,
+        background: 'rgba(255,255,255,0.02)',
+        borderBottom: '1px solid rgba(255,255,255,0.07)',
+        padding: '10px 16px',
+      }}>
+        {['Description', 'Category', 'Cur', 'Date', 'Amount', 'Actions'].map((h, i) => (
+          <div key={h} style={{
+            fontSize: 9, fontWeight: 700, color: '#3f3f46',
+            letterSpacing: '0.09em', textTransform: 'uppercase',
+            fontFamily: '"IBM Plex Mono", monospace',
+            textAlign: i >= 4 ? 'right' : 'left',
+          }}>{h}</div>
+        ))}
+      </div>
 
-            return (
-              <TableRow key={exp.id} className="border-zinc-800 hover:bg-zinc-900/50 transition-colors">
-                <TableCell className="font-medium text-zinc-100">{exp.description}</TableCell>
-                <TableCell>
-                  <Badge variant="outline" className="border-zinc-700 bg-zinc-900 text-zinc-300 font-normal">
-                    {exp.category}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-zinc-400 text-xs font-mono">
-                  {exp.currency || 'LKR'}
-                </TableCell>
-                <TableCell className="text-zinc-500 text-xs font-mono">
-                  {new Date(exp.timestamp).toLocaleString(undefined, {
-                     dateStyle: 'short',
-                     timeStyle: 'short'
-                  })}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex flex-col items-end gap-1.5">
-                    {decryptedVal !== null ? (
-                      <span className="text-zinc-50 font-mono font-medium tracking-tight">
-                        {getCurrencySymbol(exp.currency || 'LKR')}{decryptedVal.toFixed(2)}
-                      </span>
-                    ) : (
-                      <span className="text-zinc-600 text-xs italic">Decrypting...</span>
-                    )}
-                    <Badge variant="secondary" className="bg-teal-500/10 hover:bg-teal-500/10 text-teal-400 border border-teal-500/20 text-[9px] uppercase font-semibold tracking-wider px-1.5 py-0 shadow-none">
-                      Encrypted until viewed
-                    </Badge>
+      {/* ── Rows ── */}
+      <div>
+        {sorted.map((exp, rowIdx) => {
+          let decryptedVal: number | null = null;
+          try {
+            if (isCryptoReady) decryptedVal = decryptAmount(exp.amountCiphertext);
+          } catch { /* skip */ }
+
+          const catColor = getCategoryColor(exp.category);
+          const sym = getCurrencySymbol(exp.currency || 'LKR');
+          const isLast = rowIdx === sorted.length - 1;
+
+          return (
+            <div
+              key={exp.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: `${COL.desc} ${COL.cat} ${COL.cur} ${COL.date} ${COL.amt} ${COL.act}`,
+                padding: '12px 16px',
+                borderBottom: isLast ? 'none' : '1px solid rgba(255,255,255,0.04)',
+                background: 'transparent',
+                alignItems: 'center',
+                transition: 'background .15s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+              onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+            >
+              {/* Description */}
+              <div style={{
+                fontSize: 13, fontWeight: 600, color: '#e4e4e7',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                paddingRight: 12,
+              }}>
+                {exp.description}
+              </div>
+
+              {/* Category pill */}
+              <div style={{ paddingRight: 8 }}>
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  padding: '3px 8px', borderRadius: 5,
+                  background: `${catColor}14`,
+                  border: `1px solid ${catColor}30`,
+                  fontSize: 11, color: catColor,
+                  maxWidth: '100%', overflow: 'hidden',
+                  textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: catColor, flexShrink: 0 }} />
+                  {exp.category}
+                </span>
+              </div>
+
+              {/* Currency */}
+              <div style={{
+                fontSize: 10, color: '#52525b',
+                fontFamily: '"IBM Plex Mono", monospace',
+                letterSpacing: '0.05em',
+              }}>
+                {exp.currency || 'LKR'}
+              </div>
+
+              {/* Date */}
+              <div style={{
+                fontSize: 10, color: '#52525b',
+                fontFamily: '"IBM Plex Mono", monospace',
+              }}>
+                {new Date(exp.timestamp).toLocaleString(undefined, {
+                  dateStyle: 'short', timeStyle: 'short',
+                })}
+              </div>
+
+              {/* Amount */}
+              <div style={{ textAlign: 'right', paddingRight: 8 }}>
+                {decryptedVal !== null ? (
+                  <div>
+                    <div style={{
+                      fontSize: 13, fontWeight: 700, color: '#f4f4f5',
+                      fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '-0.01em',
+                    }}>
+                      <span style={{ color: '#14b8a6', marginRight: 1 }}>{sym}</span>
+                      {decryptedVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </div>
+                    <div style={{
+                      fontSize: 9, color: '#14b8a6',
+                      fontFamily: '"IBM Plex Mono", monospace',
+                      letterSpacing: '0.06em', marginTop: 2, opacity: 0.6,
+                    }}>
+                      ⟨ct⟩ decrypted
+                    </div>
                   </div>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => onEdit(exp)}
-                      className="h-8 w-8 border-zinc-700 bg-zinc-900 text-zinc-200 hover:text-zinc-100"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon"
-                      variant="outline"
-                      onClick={() => onDelete(exp.id)}
-                      className="h-8 w-8 border-zinc-700 bg-zinc-900 text-rose-300 hover:text-rose-200"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            );
-          })}
-        </TableBody>
-      </Table>
+                ) : (
+                  <span style={{
+                    fontSize: 11, color: '#3f3f46', fontStyle: 'italic',
+                    fontFamily: '"IBM Plex Mono", monospace',
+                  }}>decrypting…</span>
+                )}
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={() => onEdit(exp)}
+                  style={iconBtn('teal')}
+                  title="Edit"
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(20,184,166,0.12)';
+                    e.currentTarget.style.borderColor = 'rgba(20,184,166,0.35)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(20,184,166,0.06)';
+                    e.currentTarget.style.borderColor = 'rgba(20,184,166,0.18)';
+                  }}
+                >
+                  <Pencil size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onDelete(exp.id)}
+                  style={iconBtn('red')}
+                  title="Delete"
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(239,68,68,0.12)';
+                    e.currentTarget.style.borderColor = 'rgba(239,68,68,0.35)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(239,68,68,0.06)';
+                    e.currentTarget.style.borderColor = 'rgba(239,68,68,0.18)';
+                  }}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
-  )
-}
+  );
+};

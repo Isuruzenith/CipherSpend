@@ -23,6 +23,123 @@ const LedgerView = lazy(() => import('@/components/ledger/LedgerView').then((m) 
 
 type FilterRange = 'day' | 'week' | 'month' | 'custom';
 
+/* ── Hex Grid Background ── */
+function HexGrid() {
+  return (
+    <svg
+      style={{
+        position: 'fixed', inset: 0, width: '100%', height: '100%',
+        opacity: 0.025, pointerEvents: 'none', zIndex: 0,
+      }}
+      xmlns="http://www.w3.org/2000/svg"
+    >
+      <defs>
+        <pattern id="hex-dash" x="0" y="0" width="56" height="48" patternUnits="userSpaceOnUse">
+          <polygon points="28,2 52,14 52,38 28,50 4,38 4,14" fill="none" stroke="#14b8a6" strokeWidth="1" />
+        </pattern>
+      </defs>
+      <rect width="100%" height="100%" fill="url(#hex-dash)" />
+    </svg>
+  );
+}
+
+/* ── Cipher Stream Column ── */
+const GLYPHS = '01アイウエオカキクケコABCDEF0123456789⊕⊗∑∫√≠≡';
+function CipherStream({ col, side = 'left' }: { col: number; side?: 'left' | 'right' }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    let frame = 0;
+    const chars: string[] = Array.from({ length: 30 }, () => GLYPHS[Math.floor(Math.random() * GLYPHS.length)]);
+    const interval = setInterval(() => {
+      frame++;
+      chars[Math.floor(Math.random() * chars.length)] = GLYPHS[Math.floor(Math.random() * GLYPHS.length)];
+      el.innerHTML = chars.map((c, i) => {
+        const opacity = Math.max(0, 1 - Math.abs(i - (frame % chars.length)) / 8);
+        const color = i === frame % chars.length ? '#14b8a6' : `rgba(20,184,166,${opacity * 0.2})`;
+        return `<span style="color:${color};display:block;height:18px;font-size:11px;line-height:18px;">${c}</span>`;
+      }).join('');
+    }, 90);
+    return () => clearInterval(interval);
+  }, []);
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: 'fixed',
+        top: 0,
+        [side]: `${col}px`,
+        fontFamily: 'monospace',
+        userSelect: 'none',
+        pointerEvents: 'none',
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        zIndex: 0,
+        opacity: 0.6,
+      }}
+    />
+  );
+}
+
+/* ── Status Badge ── */
+function VaultBadge({ label }: { label: string }) {
+  return (
+    <div style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      padding: '4px 10px', borderRadius: 6,
+      background: 'rgba(20,184,166,0.07)',
+      border: '1px solid rgba(20,184,166,0.2)',
+      fontSize: 10, color: '#14b8a6', fontFamily: 'monospace',
+      letterSpacing: '0.06em',
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#14b8a6', display: 'inline-block', boxShadow: '0 0 6px #14b8a6' }} />
+      {label}
+    </div>
+  );
+}
+
+/* ── Section Panel ── */
+function Panel({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
+  return (
+    <div style={{
+      background: 'rgba(255,255,255,0.02)',
+      border: '1px solid rgba(255,255,255,0.07)',
+      borderRadius: 14,
+      padding: '20px',
+      backdropFilter: 'blur(4px)',
+      position: 'relative',
+      overflow: 'hidden',
+      ...style,
+    }}>
+      {/* subtle teal corner accent */}
+      <div style={{
+        position: 'absolute', top: 0, left: 0,
+        width: 60, height: 60,
+        background: 'radial-gradient(circle at 0 0, rgba(20,184,166,0.08), transparent 70%)',
+        pointerEvents: 'none',
+      }} />
+      {children}
+    </div>
+  );
+}
+
+/* ── Section Label ── */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      fontSize: 10, fontWeight: 600, color: '#52525b',
+      letterSpacing: '0.1em', textTransform: 'uppercase',
+      fontFamily: 'monospace', marginBottom: 10,
+      display: 'flex', alignItems: 'center', gap: 6,
+    }}>
+      <span style={{ width: 16, height: 1, background: 'rgba(20,184,166,0.4)', display: 'inline-block' }} />
+      {children}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
@@ -31,15 +148,16 @@ export default function Dashboard() {
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
   const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>('LKR');
+  const [mounted, setMounted] = useState(false);
   const { token, logout, email } = useCrypto();
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => { setTimeout(() => setMounted(true), 60); }, []);
 
   useEffect(() => {
     if (!token) return;
     fetch('http://localhost:8000/api/expenses', {
-      headers: {
-        'Authorization': `Bearer ${token}`
-      }
+      headers: { 'Authorization': `Bearer ${token}` }
     })
       .then(res => res.json())
       .then(data => setExpenses(data))
@@ -47,28 +165,20 @@ export default function Dashboard() {
   }, [token]);
 
   useEffect(() => {
-    try {
-      setSelectedCurrency(getDefaultCurrency());
-    } catch {
-      setSelectedCurrency('LKR');
-    }
+    try { setSelectedCurrency(getDefaultCurrency()); }
+    catch { setSelectedCurrency('LKR'); }
   }, []);
 
   useEffect(() => {
     if (isChartVisible) return;
     const target = chartContainerRef.current;
     if (!target) return;
-
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) {
-          setIsChartVisible(true);
-          observer.disconnect();
-        }
+        if (entries.some((e) => e.isIntersecting)) { setIsChartVisible(true); observer.disconnect(); }
       },
       { root: null, threshold: 0.1 }
     );
-
     observer.observe(target);
     return () => observer.disconnect();
   }, [isChartVisible]);
@@ -82,9 +192,7 @@ export default function Dashboard() {
     setExpenses(prev => [...prev, exp]);
   };
 
-  const handleEditExpense = (expense: ExpenseRecord) => {
-    setEditingExpenseId(expense.id);
-  };
+  const handleEditExpense = (expense: ExpenseRecord) => setEditingExpenseId(expense.id);
 
   const handleDeleteExpense = async (expenseId: string) => {
     if (!token) return;
@@ -102,38 +210,26 @@ export default function Dashboard() {
     }
   };
 
-  const getStartOfDay = (date: Date) => {
-    const d = new Date(date);
-    d.setHours(0, 0, 0, 0);
-    return d;
-  };
-
-  const getEndOfDay = (date: Date) => {
-    const d = new Date(date);
-    d.setHours(23, 59, 59, 999);
-    return d;
-  };
+  const getStartOfDay = (date: Date) => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; };
+  const getEndOfDay = (date: Date) => { const d = new Date(date); d.setHours(23, 59, 59, 999); return d; };
 
   const getDateRange = (): { start: Date | null; end: Date | null } => {
     const now = new Date();
-    if (filterRange === 'day') {
-      return { start: getStartOfDay(now), end: getEndOfDay(now) };
-    }
+    if (filterRange === 'day') return { start: getStartOfDay(now), end: getEndOfDay(now) };
     if (filterRange === 'week') {
       const start = getStartOfDay(new Date(now));
-      const day = start.getDay();
-      const diff = day === 0 ? 6 : day - 1;
+      const diff = start.getDay() === 0 ? 6 : start.getDay() - 1;
       start.setDate(start.getDate() - diff);
       return { start, end: getEndOfDay(now) };
     }
     if (filterRange === 'month') {
-      const start = new Date(now.getFullYear(), now.getMonth(), 1);
-      return { start: getStartOfDay(start), end: getEndOfDay(now) };
+      return { start: getStartOfDay(new Date(now.getFullYear(), now.getMonth(), 1)), end: getEndOfDay(now) };
     }
     if (!customStart && !customEnd) return { start: null, end: null };
-    const start = customStart ? getStartOfDay(new Date(customStart)) : null;
-    const end = customEnd ? getEndOfDay(new Date(customEnd)) : null;
-    return { start, end };
+    return {
+      start: customStart ? getStartOfDay(new Date(customStart)) : null,
+      end: customEnd ? getEndOfDay(new Date(customEnd)) : null,
+    };
   };
 
   const { start: rangeStart, end: rangeEnd } = getDateRange();
@@ -146,111 +242,260 @@ export default function Dashboard() {
     return true;
   });
 
-  return (
-    <MainLayout>
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-        <div>
-          <h2 className="text-2xl font-bold text-zinc-50 flex items-center gap-2">
-            <ShieldCheck className="text-teal-500 w-6 h-6" />
-            Encrypted Dashboard
-          </h2>
-          <p className="text-zinc-400 text-sm">Vault synced for {email}</p>
-        </div>
-        <div className="flex items-center gap-4">
-          <Suspense fallback={<div className="h-10 w-32 rounded-md bg-zinc-900 border border-zinc-800" />}>
-            <AddExpenseForm
-              onAdd={handleAddExpense}
-              editExpense={expenses.find((item) => item.id === editingExpenseId) ?? null}
-              onCancelEdit={() => setEditingExpenseId(null)}
-            />
-          </Suspense>
-          <Button variant="outline" onClick={logout} className="border-zinc-800 text-zinc-300 hover:text-zinc-50 bg-zinc-950">
-            <LogOut className="w-4 h-4 mr-2" />
-            Lock Vault
-          </Button>
-        </div>
-      </div>
+  const FILTER_RANGES: { value: FilterRange; label: string }[] = [
+    { value: 'day', label: 'Day' },
+    { value: 'week', label: 'Week' },
+    { value: 'month', label: 'Month' },
+    { value: 'custom', label: 'Custom' },
+  ];
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-10 items-start">
-        <div>
-          <Suspense fallback={<div className="h-[220px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />}>
-            <TotalDisplay expenses={filteredExpenses} currency={selectedCurrency} />
-          </Suspense>
-          <div className="mt-4 rounded-xl border border-zinc-800 bg-zinc-900/50 p-3">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-              <div>
-                <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-2">
-                  Currency
+  return (
+    <div style={{
+      minHeight: '100vh',
+      background: '#080a0c',
+      fontFamily: '"IBM Plex Sans", system-ui, sans-serif',
+      position: 'relative',
+      color: '#f4f4f5',
+    }}>
+      <HexGrid />
+
+      {/* Decorative cipher streams */}
+      {[20, 55].map(c => <CipherStream key={`l${c}`} col={c} side="left" />)}
+      {[20, 55].map(c => <CipherStream key={`r${c}`} col={c} side="right" />)}
+
+      {/* Wrap with MainLayout for nav/sidebar */}
+      <MainLayout>
+        <div style={{
+          position: 'relative', zIndex: 1,
+          opacity: mounted ? 1 : 0,
+          transform: mounted ? 'translateY(0)' : 'translateY(12px)',
+          transition: 'opacity .5s, transform .5s',
+        }}>
+
+          {/* ── Header ── */}
+          <div style={{
+            display: 'flex', flexWrap: 'wrap',
+            justifyContent: 'space-between', alignItems: 'flex-start',
+            gap: 16, marginBottom: 32,
+          }}>
+            <div>
+              <VaultBadge label="VAULT ACTIVE" />
+              <h2 style={{
+                fontSize: 26, fontWeight: 700, color: '#f4f4f5',
+                margin: '10px 0 4px', letterSpacing: '-0.02em',
+                display: 'flex', alignItems: 'center', gap: 10,
+              }}>
+                <ShieldCheck style={{ color: '#14b8a6', width: 22, height: 22 }} />
+                Encrypted Dashboard
+              </h2>
+              <p style={{ fontSize: 12, color: '#52525b', fontFamily: 'monospace', margin: 0 }}>
+                Vault synced · <span style={{ color: '#3f3f46' }}>{email}</span>
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Suspense fallback={
+                <div style={{ height: 38, width: 130, borderRadius: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)' }} />
+              }>
+                <AddExpenseForm
+                  onAdd={handleAddExpense}
+                  editExpense={expenses.find((item) => item.id === editingExpenseId) ?? null}
+                  onCancelEdit={() => setEditingExpenseId(null)}
+                />
+              </Suspense>
+
+              <button
+                onClick={logout}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '9px 16px', borderRadius: 9,
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  color: '#71717a', fontSize: 13, fontWeight: 500,
+                  cursor: 'pointer', transition: 'all .2s',
+                  fontFamily: 'inherit',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.borderColor = 'rgba(239,68,68,0.3)';
+                  e.currentTarget.style.color = '#f87171';
+                  e.currentTarget.style.background = 'rgba(239,68,68,0.05)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                  e.currentTarget.style.color = '#71717a';
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                }}
+              >
+                <LogOut style={{ width: 14, height: 14 }} />
+                Lock Vault
+              </button>
+            </div>
+          </div>
+
+          {/* ── Main Grid: Total + Controls / Charts ── */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
+            gap: 20, marginBottom: 20,
+          }}>
+            {/* Left column: Total + filters */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <Suspense fallback={
+                <div style={{ height: 220, borderRadius: 14, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.07)' }} />
+              }>
+                <TotalDisplay expenses={filteredExpenses} currency={selectedCurrency} />
+              </Suspense>
+
+              <Panel>
+                <SectionLabel>Filters</SectionLabel>
+                {/* Currency row */}
+                <div style={{ marginBottom: 14 }}>
+                  <div style={{
+                    fontSize: 10, color: '#52525b', fontFamily: 'monospace',
+                    letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6,
+                  }}>Currency</div>
+                  <Select value={selectedCurrency} onValueChange={(v) => setSelectedCurrency(v as SupportedCurrency)}>
+                    <SelectTrigger style={{
+                      background: 'rgba(255,255,255,0.03)',
+                      border: '1px solid rgba(255,255,255,0.09)',
+                      color: '#d4d4d8', fontSize: 13, borderRadius: 8,
+                      fontFamily: 'monospace',
+                    }}>
+                      <SelectValue placeholder="Currency" />
+                    </SelectTrigger>
+                    <SelectContent style={{ background: '#0f1214', border: '1px solid rgba(255,255,255,0.08)', color: '#d4d4d8' }}>
+                      {SUPPORTED_CURRENCIES.map((cur) => (
+                        <SelectItem key={cur} value={cur} style={{ fontFamily: 'monospace', fontSize: 13 }}>{cur}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
-                <Select value={selectedCurrency} onValueChange={(v) => setSelectedCurrency(v as SupportedCurrency)}>
-                  <SelectTrigger className="bg-zinc-950 border-zinc-800 text-zinc-200">
-                    <SelectValue placeholder="Currency" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-800 text-zinc-100">
-                    {SUPPORTED_CURRENCIES.map((cur) => (
-                      <SelectItem key={cur} value={cur}>{cur}</SelectItem>
+
+                {/* Range pills */}
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{
+                    fontSize: 10, color: '#52525b', fontFamily: 'monospace',
+                    letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8,
+                  }}>Filter Range</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {FILTER_RANGES.map(({ value, label }) => (
+                      <button
+                        key={value}
+                        onClick={() => setFilterRange(value)}
+                        style={{
+                          padding: '6px 14px',
+                          borderRadius: 7,
+                          fontSize: 12, fontWeight: 600,
+                          fontFamily: 'monospace',
+                          cursor: 'pointer',
+                          border: filterRange === value
+                            ? '1px solid rgba(20,184,166,0.5)'
+                            : '1px solid rgba(255,255,255,0.07)',
+                          background: filterRange === value
+                            ? 'rgba(20,184,166,0.12)'
+                            : 'rgba(255,255,255,0.02)',
+                          color: filterRange === value ? '#14b8a6' : '#52525b',
+                          transition: 'all .15s',
+                          letterSpacing: '0.04em',
+                        }}
+                      >{label}</button>
                     ))}
-                  </SelectContent>
-                </Select>
+                  </div>
+                </div>
+
+                {filterRange === 'custom' && (
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                    {[
+                      { value: customStart, onChange: setCustomStart, placeholder: 'Start date' },
+                      { value: customEnd, onChange: setCustomEnd, placeholder: 'End date' },
+                    ].map((props, i) => (
+                      <input
+                        key={i}
+                        type="date"
+                        value={props.value}
+                        onChange={e => props.onChange(e.target.value)}
+                        style={{
+                          padding: '8px 10px', borderRadius: 7, fontSize: 12,
+                          background: 'rgba(255,255,255,0.03)',
+                          border: '1px solid rgba(255,255,255,0.09)',
+                          color: '#d4d4d8', fontFamily: 'monospace', outline: 'none',
+                          colorScheme: 'dark',
+                        }}
+                      />
+                    ))}
+                  </div>
+                )}
+              </Panel>
+            </div>
+
+            {/* Right column: Charts */}
+            <div ref={chartContainerRef}>
+              <Panel style={{ padding: 0, overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', marginBottom: 0 }}>
+                  <SectionLabel>Analytics</SectionLabel>
+                </div>
+                <Suspense fallback={
+                  <div style={{ height: 440, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3f3f46', fontFamily: 'monospace', fontSize: 12 }}>
+                    loading charts…
+                  </div>
+                }>
+                  {isChartVisible
+                    ? <AnalyticsCharts expenses={filteredExpenses} />
+                    : <div style={{ height: 440 }} />
+                  }
+                </Suspense>
+              </Panel>
+            </div>
+          </div>
+
+          {/* ── Ledger ── */}
+          <Panel>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 16,
+            }}>
+              <div>
+                <SectionLabel>Secure Ledger</SectionLabel>
+                <h3 style={{ fontSize: 15, fontWeight: 600, color: '#e4e4e7', margin: 0, letterSpacing: '-0.01em' }}>
+                  Transaction Records
+                </h3>
+              </div>
+              <div style={{
+                padding: '4px 10px', borderRadius: 20,
+                background: 'rgba(20,184,166,0.06)',
+                border: '1px solid rgba(20,184,166,0.15)',
+                fontSize: 11, color: '#14b8a6', fontFamily: 'monospace',
+              }}>
+                {filteredExpenses.length} records
               </div>
             </div>
-            <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400 mb-3">
-              Filter Range
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(['day', 'week', 'month', 'custom'] as const).map((range) => (
-                <Button
-                  key={range}
-                  type="button"
-                  size="sm"
-                  variant={filterRange === range ? 'default' : 'outline'}
-                  onClick={() => setFilterRange(range)}
-                  className={filterRange === range ? 'bg-teal-500 text-zinc-950 hover:bg-teal-400' : 'border-zinc-700 bg-zinc-900 text-zinc-300'}
-                >
-                  {range === 'day' ? 'Day' : range === 'week' ? 'Week' : range === 'month' ? 'Month' : 'Custom'}
-                </Button>
-              ))}
-            </div>
-            {filterRange === 'custom' && (
-              <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
-                <Input
-                  type="date"
-                  value={customStart}
-                  onChange={(e) => setCustomStart(e.target.value)}
-                  className="bg-zinc-950 border-zinc-800 text-zinc-200"
-                />
-                <Input
-                  type="date"
-                  value={customEnd}
-                  onChange={(e) => setCustomEnd(e.target.value)}
-                  className="bg-zinc-950 border-zinc-800 text-zinc-200"
-                />
+            <Suspense fallback={
+              <div style={{ height: 260, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#3f3f46', fontFamily: 'monospace', fontSize: 12 }}>
+                loading ledger…
               </div>
-            )}
+            }>
+              <LedgerView expenses={filteredExpenses} onEdit={handleEditExpense} onDelete={handleDeleteExpense} />
+            </Suspense>
+          </Panel>
+
+          {/* ── Footer note ── */}
+          <div style={{
+            marginTop: 24, padding: '10px 14px',
+            background: 'rgba(245,158,11,0.03)',
+            border: '1px solid rgba(245,158,11,0.1)',
+            borderRadius: 8, fontSize: 11, color: '#57534e',
+            fontFamily: 'monospace', lineHeight: 1.6,
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ color: '#a16207' }}>⚠</span>
+            All data is encrypted client-side. Passphrase is unrecoverable by design.
           </div>
         </div>
-        <div ref={chartContainerRef}>
-          <Suspense fallback={<div className="h-[460px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />}>
-            {isChartVisible ? (
-              <AnalyticsCharts expenses={filteredExpenses} />
-            ) : (
-              <div className="h-[460px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />
-            )}
-          </Suspense>
-        </div>
-      </div>
+      </MainLayout>
 
-      <div className="grid grid-cols-1 gap-8">
-        <div className="w-full">
-          <h3 className="text-lg font-medium text-white mb-4 flex items-center gap-2">
-            Secure Ledger
-            <span className="text-xs bg-zinc-800 text-zinc-400 px-2 py-0.5 rounded-full">{filteredExpenses.length} records</span>
-          </h3>
-          <Suspense fallback={<div className="h-[260px] rounded-2xl bg-zinc-900/60 border border-zinc-800" />}>
-            <LedgerView expenses={filteredExpenses} onEdit={handleEditExpense} onDelete={handleDeleteExpense} />
-          </Suspense>
-        </div>
-      </div>
-    </MainLayout>
-  )
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg); } }
+      `}</style>
+    </div>
+  );
 }
