@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/Isuruzenith/CipherSpend/compare/v1.2.0...v1.2.1) (2026-03-23)
+
+
+### Bug Fixes
+
+* Revamp Settings page with enhanced UI components and improved functionality ([5412c2d](https://github.com/Isuruzenith/CipherSpend/commit/5412c2dbcde2d3ccc1ec797eec9afedab7b38911))
+
 ## [1.2.0](https://github.com/Isuruzenith/CipherSpend/compare/v1.1.0...v1.2.0) (2026-03-23)
 
 
