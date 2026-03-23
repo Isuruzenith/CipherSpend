@@ -209,19 +209,19 @@ export default function Dashboard() {
   };
 
   const handleCSVExport = async () => {
-    if (!token) return;
-    const loadToast = toast.loading('Fetching encrypted data...');
+    const recordsToExport = [...filteredExpenses].sort(
+      (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    );
+
+    if (recordsToExport.length === 0) {
+      toast.error('No visible ledger records to export');
+      return;
+    }
+
+    const loadToast = toast.loading(`Decrypting ${recordsToExport.length} visible rows...`);
     try {
-      const res = await fetch('http://localhost:8000/api/expenses', {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) throw new Error(`Export fetch failed (${res.status})`);
-
-      const data = await res.json();
-      toast.loading(`Decrypting ${data.length} rows locally...`, { id: loadToast });
-
       let csvContent = 'data:text/csv;charset=utf-8,ID,Date,Currency,Category,Description,DecryptedAmount\n';
-      data.forEach((exp: any) => {
+      recordsToExport.forEach((exp) => {
         let val = 0;
         try { val = decryptAmount(exp.amountCiphertext); } catch { /* ignore row */ }
         const row = [
@@ -255,10 +255,18 @@ export default function Dashboard() {
     d.setHours(0, 0, 0, 0);
     return d;
   };
-  const getEndOfDay = (date: Date) => {
+
+  const addDays = (date: Date, days: number) => {
     const d = new Date(date);
-    d.setHours(23, 59, 59, 999);
+    d.setDate(d.getDate() + days);
     return d;
+  };
+
+  const parseLocalDateInput = (value: string): Date | null => {
+    if (!value) return null;
+    const [year, month, day] = value.split('-').map(Number);
+    if (!year || !month || !day) return null;
+    return new Date(year, month - 1, day);
   };
 
   const parseExpenseTimestamp = (timestamp: string): Date | null => {
@@ -272,32 +280,42 @@ export default function Dashboard() {
     return null;
   };
 
-  const getDateRange = (): { start: Date | null; end: Date | null } => {
+  const getDateRange = (): { start: Date | null; endExclusive: Date | null } => {
     const now = new Date();
-    if (filterRange === 'day') return { start: getStartOfDay(now), end: getEndOfDay(now) };
+    if (filterRange === 'day') {
+      const start = getStartOfDay(now);
+      return { start, endExclusive: addDays(start, 1) };
+    }
+
     if (filterRange === 'week') {
       const start = getStartOfDay(new Date(now));
       const diff = start.getDay() === 0 ? 6 : start.getDay() - 1;
       start.setDate(start.getDate() - diff);
-      return { start, end: getEndOfDay(now) };
+      return { start, endExclusive: addDays(getStartOfDay(now), 1) };
     }
+
     if (filterRange === 'month') {
-      return { start: getStartOfDay(new Date(now.getFullYear(), now.getMonth(), 1)), end: getEndOfDay(now) };
+      const start = getStartOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+      return { start, endExclusive: addDays(getStartOfDay(now), 1) };
     }
-    if (!customStart && !customEnd) return { start: null, end: null };
+
+    if (!customStart && !customEnd) return { start: null, endExclusive: null };
+
+    const start = customStart ? parseLocalDateInput(customStart) : null;
+    const end = customEnd ? parseLocalDateInput(customEnd) : null;
     return {
-      start: customStart ? getStartOfDay(new Date(customStart)) : null,
-      end: customEnd ? getEndOfDay(new Date(customEnd)) : null,
+      start: start ? getStartOfDay(start) : null,
+      endExclusive: end ? addDays(getStartOfDay(end), 1) : null,
     };
   };
 
-  const { start: rangeStart, end: rangeEnd } = getDateRange();
+  const { start: rangeStart, endExclusive: rangeEndExclusive } = getDateRange();
   const filteredExpenses = expenses.filter((expense) => {
     const ts = parseExpenseTimestamp(expense.timestamp);
     if (!ts) return false;
 
     if (rangeStart && ts.getTime() < rangeStart.getTime()) return false;
-    if (rangeEnd && ts.getTime() > rangeEnd.getTime()) return false;
+    if (rangeEndExclusive && ts.getTime() >= rangeEndExclusive.getTime()) return false;
     if ((expense.currency || 'LKR') !== selectedCurrency) return false;
     return true;
   });
@@ -363,30 +381,6 @@ export default function Dashboard() {
                   onCancelEdit={() => setEditingExpenseId(null)}
                 />
               </Suspense>
-
-              <button
-                onClick={handleCSVExport}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 7,
-                  padding: '9px 16px', borderRadius: 9,
-                  background: 'rgba(20,184,166,0.08)',
-                  border: '1px solid rgba(20,184,166,0.22)',
-                  color: '#2dd4bf', fontSize: 14, fontWeight: 600,
-                  cursor: 'pointer', transition: 'all .2s',
-                  fontFamily: 'inherit',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = 'rgba(20,184,166,0.14)';
-                  e.currentTarget.style.borderColor = 'rgba(20,184,166,0.35)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = 'rgba(20,184,166,0.08)';
-                  e.currentTarget.style.borderColor = 'rgba(20,184,166,0.22)';
-                }}
-              >
-                <DownloadCloud style={{ width: 14, height: 14 }} />
-                Export CSV
-              </button>
 
               <button
                 onClick={logout}
@@ -544,13 +538,39 @@ export default function Dashboard() {
                   Transaction Records
                 </h3>
               </div>
-              <div style={{
-                padding: '4px 10px', borderRadius: 20,
-                background: 'rgba(20,184,166,0.06)',
-                border: '1px solid rgba(20,184,166,0.15)',
-                fontSize: 12, color: '#14b8a6', fontFamily: 'monospace',
-              }}>
-                {filteredExpenses.length} records
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <button
+                  onClick={handleCSVExport}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    padding: '7px 12px', borderRadius: 9,
+                    background: 'rgba(20,184,166,0.08)',
+                    border: '1px solid rgba(20,184,166,0.22)',
+                    color: '#2dd4bf', fontSize: 12, fontWeight: 600,
+                    cursor: 'pointer', transition: 'all .2s',
+                    fontFamily: 'monospace',
+                  }}
+                  onMouseEnter={e => {
+                    e.currentTarget.style.background = 'rgba(20,184,166,0.14)';
+                    e.currentTarget.style.borderColor = 'rgba(20,184,166,0.35)';
+                  }}
+                  onMouseLeave={e => {
+                    e.currentTarget.style.background = 'rgba(20,184,166,0.08)';
+                    e.currentTarget.style.borderColor = 'rgba(20,184,166,0.22)';
+                  }}
+                >
+                  <DownloadCloud style={{ width: 13, height: 13 }} />
+                  Export CSV
+                </button>
+
+                <div style={{
+                  padding: '4px 10px', borderRadius: 20,
+                  background: 'rgba(20,184,166,0.06)',
+                  border: '1px solid rgba(20,184,166,0.15)',
+                  fontSize: 12, color: '#14b8a6', fontFamily: 'monospace',
+                }}>
+                  {filteredExpenses.length} records
+                </div>
               </div>
             </div>
             <Suspense fallback={

@@ -226,14 +226,19 @@ export const AddExpenseForm: React.FC<{
           <Backdrop onClick={close} />
 
           <div style={{
-            position: 'fixed', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
+            position: 'fixed', inset: 0,
             zIndex: 101,
-            width: '100%', maxWidth: 460,
-            padding: '0 16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            width: '100%',
+            padding: '56px 16px 24px',
+            overflowY: 'auto',
             animation: 'slideUp .2s ease',
           }}>
             <div style={{
+              width: '100%',
+              maxWidth: 460,
               background: '#0c0e10',
               border: '1px solid rgba(255,255,255,0.09)',
               borderRadius: 16,
@@ -419,7 +424,7 @@ export const AddExpenseForm: React.FC<{
                       onBlur={() => setFocused(null)}
                       placeholder="0.00"
                       required
-                      style={{ ...inputStyle(focused === 'amount'), paddingLeft: 34 }}
+                      style={{ ...inputStyle(focused === 'amount'), paddingLeft: 44 }}
                     />
                   </div>
                 </div>
@@ -509,8 +514,8 @@ export const AddExpenseForm: React.FC<{
 
       <style>{`
         @keyframes fadeIn  { from { opacity: 0; }                    to { opacity: 1; } }
-        @keyframes slideUp { from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)); }
-                             to   { opacity: 1; transform: translate(-50%, -50%); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(14px); }
+                             to   { opacity: 1; transform: translateY(0); } }
         @keyframes spin    { to   { transform: rotate(360deg); } }
       `}</style>
     </>

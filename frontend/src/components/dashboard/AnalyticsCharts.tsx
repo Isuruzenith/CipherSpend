@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState, useMemo } from 'react';
 import { useCrypto } from '../../context/CryptoContext';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, Tooltip } from 'recharts';
 import { Lock } from 'lucide-react';
 import type { ExpenseRecord } from '@/components/ledger/AddExpenseForm';
 
@@ -162,25 +162,23 @@ export const AnalyticsCharts: React.FC<{ expenses: ExpenseRecord[] }> = ({ expen
           <>
             {/* Donut chart */}
             <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
-              <ResponsiveContainer width={300} height={300}>
-                <PieChart>
-                  <Tooltip cursor={false} content={<CipherTooltip />} />
-                  <Pie
-                    data={data}
-                    dataKey="value"
-                    nameKey="name"
-                    cx="50%" cy="50%"
-                    innerRadius={82} outerRadius={126}
-                    strokeWidth={2}
-                    stroke="rgba(8,10,12,0.8)"
-                    paddingAngle={2}
-                  >
-                    {data.map((entry) => (
-                      <Cell key={`cell-${entry.name}`} fill={getCategoryColor(entry.name)} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+              <PieChart width={300} height={300}>
+                <Tooltip cursor={false} content={<CipherTooltip />} />
+                <Pie
+                  data={data}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%" cy="50%"
+                  innerRadius={82} outerRadius={126}
+                  strokeWidth={2}
+                  stroke="rgba(8,10,12,0.8)"
+                  paddingAngle={2}
+                >
+                  {data.map((entry) => (
+                    <Cell key={`cell-${entry.name}`} fill={getCategoryColor(entry.name)} />
+                  ))}
+                </Pie>
+              </PieChart>
 
               {/* Centre label */}
               <div style={{

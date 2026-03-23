@@ -13,7 +13,7 @@ export const MainLayout: React.FC<{ children: React.ReactNode }> = ({ children }
       <header className="border-b border-zinc-800 bg-zinc-950/80 sticky top-0 z-10 transition-colors duration-300">
         <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-             <Link to="/dashboard" className="flex items-center gap-3 group">
+             <Link to="/" className="flex items-center gap-3 group">
                <img src="/favicon-32x32.png" alt="CipherSpend logo" className="w-8 h-8 rounded-sm" />
                 <span className="font-bold text-lg tracking-tight text-white group-hover:text-teal-300 transition-colors">CipherSpend</span>
               </Link>
