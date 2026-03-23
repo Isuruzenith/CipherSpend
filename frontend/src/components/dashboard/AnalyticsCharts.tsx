@@ -11,8 +11,6 @@ interface CategoryData {
   value: number;
 }
 
-const toColorKey = (name: string) => name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-
 const getCategoryColor = (name: string) => {
   let hash = 0;
   for (let i = 0; i < name.length; i += 1) {
@@ -41,10 +39,10 @@ function CipherTooltip({ active, payload }: any) {
       fontFamily: '"IBM Plex Mono", monospace',
       boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
     }}>
-      <div style={{ fontSize: 10, color: '#52525b', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>
+      <div style={{ fontSize: 11, color: '#52525b', letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 4 }}>
         {name}
       </div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: '#f4f4f5' }}>
+      <div style={{ fontSize: 16, fontWeight: 700, color: '#f4f4f5' }}>
         {value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
       </div>
     </div>
@@ -110,10 +108,10 @@ export const AnalyticsCharts: React.FC<{ expenses: ExpenseRecord[] }> = ({ expen
               <Lock size={13} color="#14b8a6" />
             </div>
             <div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
                 Spending by Category
               </div>
-              <div style={{ fontSize: 11, color: '#52525b', fontFamily: '"IBM Plex Mono", monospace', marginTop: 1 }}>
+              <div style={{ fontSize: 12, color: '#52525b', fontFamily: '"IBM Plex Mono", monospace', marginTop: 1 }}>
                 Server-blind aggregation · local decrypt
               </div>
             </div>
@@ -134,7 +132,7 @@ export const AnalyticsCharts: React.FC<{ expenses: ExpenseRecord[] }> = ({ expen
                 borderRadius: '50%', background: '#14b8a6',
               }} />
             </span>
-            <span style={{ fontSize: 10, color: '#14b8a6', fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.05em' }}>
+            <span style={{ fontSize: 11, color: '#14b8a6', fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.05em' }}>
               SYNCING
             </span>
           </div>
@@ -156,7 +154,7 @@ export const AnalyticsCharts: React.FC<{ expenses: ExpenseRecord[] }> = ({ expen
             }}>
               <Lock size={16} color="#3f3f46" />
             </div>
-            <span style={{ fontSize: 12, color: '#3f3f46', fontFamily: '"IBM Plex Mono", monospace' }}>
+            <span style={{ fontSize: 13, color: '#3f3f46', fontFamily: '"IBM Plex Mono", monospace' }}>
               {isSyncing ? 'Homomorphically aggregating…' : 'No data to display'}
             </span>
           </div>
@@ -191,14 +189,14 @@ export const AnalyticsCharts: React.FC<{ expenses: ExpenseRecord[] }> = ({ expen
                 textAlign: 'center', pointerEvents: 'none',
               }}>
                 <div style={{
-                  fontSize: 10, color: '#52525b', letterSpacing: '0.07em',
+                  fontSize: 11, color: '#52525b', letterSpacing: '0.07em',
                   textTransform: 'uppercase', fontFamily: '"IBM Plex Mono", monospace',
                   marginBottom: 3,
                 }}>Total</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: '#f4f4f5', letterSpacing: '-0.02em' }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: '#f4f4f5', letterSpacing: '-0.02em' }}>
                   {total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-                <div style={{ fontSize: 9, color: '#3f3f46', fontFamily: '"IBM Plex Mono", monospace', marginTop: 2 }}>
+                <div style={{ fontSize: 10, color: '#3f3f46', fontFamily: '"IBM Plex Mono", monospace', marginTop: 2 }}>
                   {data.length} {data.length === 1 ? 'category' : 'categories'}
                 </div>
               </div>
@@ -223,10 +221,10 @@ export const AnalyticsCharts: React.FC<{ expenses: ExpenseRecord[] }> = ({ expen
                       width: 7, height: 7, borderRadius: '50%', flexShrink: 0,
                       background: getCategoryColor(entry.name),
                     }} />
-                    <span style={{ fontSize: 11, color: '#a1a1aa', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <span style={{ fontSize: 12, color: '#a1a1aa', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {entry.name}
                     </span>
-                    <span style={{ fontSize: 10, color: '#52525b', fontFamily: '"IBM Plex Mono", monospace' }}>
+                    <span style={{ fontSize: 11, color: '#52525b', fontFamily: '"IBM Plex Mono", monospace' }}>
                       {pct}%
                     </span>
                   </div>
@@ -243,10 +241,10 @@ export const AnalyticsCharts: React.FC<{ expenses: ExpenseRecord[] }> = ({ expen
         padding: '10px 20px',
         display: 'flex', flexDirection: 'column', gap: 3,
       }}>
-        <div style={{ fontSize: 11, color: '#3f3f46', fontFamily: '"IBM Plex Mono", monospace' }}>
+        <div style={{ fontSize: 12, color: '#3f3f46', fontFamily: '"IBM Plex Mono", monospace' }}>
           Decrypted securely in-browser via node-seal WASM
         </div>
-        <div style={{ fontSize: 10, color: '#27272a', fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.03em' }}>
+        <div style={{ fontSize: 11, color: '#27272a', fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '0.03em' }}>
           Each slice = separately encrypted sum · CKKS scheme · scale 2⁴⁰
         </div>
       </div>

@@ -53,7 +53,7 @@ export const TotalDisplay: React.FC<{ expenses: ExpenseRecord[]; currency: strin
       <div style={{ position: 'relative', zIndex: 1 }}>
         {/* Section label */}
         <div style={{
-          fontSize: 10, fontWeight: 700, color: '#52525b',
+          fontSize: 11, fontWeight: 700, color: '#52525b',
           letterSpacing: '0.09em', textTransform: 'uppercase',
           fontFamily: '"IBM Plex Mono", monospace',
           display: 'flex', alignItems: 'center', gap: 7, marginBottom: 18,
@@ -84,14 +84,14 @@ export const TotalDisplay: React.FC<{ expenses: ExpenseRecord[]; currency: strin
           display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6,
         }}>
           <span style={{
-            fontSize: 28, fontWeight: 800, color: '#14b8a6',
+            fontSize: 30, fontWeight: 800, color: '#14b8a6',
             letterSpacing: '-0.01em', lineHeight: 1,
             fontFamily: '"IBM Plex Mono", monospace',
           }}>
             {sym}
           </span>
           <span style={{
-            fontSize: 52, fontWeight: 800, color: '#f4f4f5',
+            fontSize: 56, fontWeight: 800, color: '#f4f4f5',
             letterSpacing: '-0.03em', lineHeight: 1,
           }}>
             {total !== null
@@ -102,7 +102,7 @@ export const TotalDisplay: React.FC<{ expenses: ExpenseRecord[]; currency: strin
 
         {/* Sub-label */}
         <div style={{
-          fontSize: 11, color: '#3f3f46',
+          fontSize: 12, color: '#3f3f46',
           fontFamily: '"IBM Plex Mono", monospace',
           letterSpacing: '0.03em', marginTop: 14,
           display: 'flex', alignItems: 'center', gap: 8,
@@ -112,7 +112,7 @@ export const TotalDisplay: React.FC<{ expenses: ExpenseRecord[]; currency: strin
             padding: '3px 8px', borderRadius: 5,
             background: 'rgba(20,184,166,0.06)',
             border: '1px solid rgba(20,184,166,0.14)',
-            color: '#14b8a6', fontSize: 10, fontWeight: 600,
+            color: '#14b8a6', fontSize: 11, fontWeight: 600,
           }}>
             FHE
           </span>

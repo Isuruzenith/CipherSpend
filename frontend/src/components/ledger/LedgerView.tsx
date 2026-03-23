@@ -79,7 +79,7 @@ export const LedgerView: React.FC<{
       }}>
         {['Description', 'Category', 'Cur', 'Date', 'Amount', 'Actions'].map((h, i) => (
           <div key={h} style={{
-            fontSize: 9, fontWeight: 700, color: '#3f3f46',
+            fontSize: 10, fontWeight: 700, color: '#3f3f46',
             letterSpacing: '0.09em', textTransform: 'uppercase',
             fontFamily: '"IBM Plex Mono", monospace',
             textAlign: i >= 4 ? 'right' : 'left',
@@ -116,7 +116,7 @@ export const LedgerView: React.FC<{
             >
               {/* Description */}
               <div style={{
-                fontSize: 13, fontWeight: 600, color: '#e4e4e7',
+                fontSize: 14, fontWeight: 600, color: '#e4e4e7',
                 overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 paddingRight: 12,
               }}>
@@ -130,7 +130,7 @@ export const LedgerView: React.FC<{
                   padding: '3px 8px', borderRadius: 5,
                   background: `${catColor}14`,
                   border: `1px solid ${catColor}30`,
-                  fontSize: 11, color: catColor,
+                  fontSize: 12, color: catColor,
                   maxWidth: '100%', overflow: 'hidden',
                   textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                 }}>
@@ -141,7 +141,7 @@ export const LedgerView: React.FC<{
 
               {/* Currency */}
               <div style={{
-                fontSize: 10, color: '#52525b',
+                fontSize: 11, color: '#52525b',
                 fontFamily: '"IBM Plex Mono", monospace',
                 letterSpacing: '0.05em',
               }}>
@@ -150,7 +150,7 @@ export const LedgerView: React.FC<{
 
               {/* Date */}
               <div style={{
-                fontSize: 10, color: '#52525b',
+                fontSize: 11, color: '#52525b',
                 fontFamily: '"IBM Plex Mono", monospace',
               }}>
                 {new Date(exp.timestamp).toLocaleString(undefined, {
@@ -163,14 +163,14 @@ export const LedgerView: React.FC<{
                 {decryptedVal !== null ? (
                   <div>
                     <div style={{
-                      fontSize: 13, fontWeight: 700, color: '#f4f4f5',
+                      fontSize: 14, fontWeight: 700, color: '#f4f4f5',
                       fontFamily: '"IBM Plex Mono", monospace', letterSpacing: '-0.01em',
                     }}>
                       <span style={{ color: '#14b8a6', marginRight: 1 }}>{sym}</span>
                       {decryptedVal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                     <div style={{
-                      fontSize: 9, color: '#14b8a6',
+                      fontSize: 10, color: '#14b8a6',
                       fontFamily: '"IBM Plex Mono", monospace',
                       letterSpacing: '0.06em', marginTop: 2, opacity: 0.6,
                     }}>
@@ -179,7 +179,7 @@ export const LedgerView: React.FC<{
                   </div>
                 ) : (
                   <span style={{
-                    fontSize: 11, color: '#3f3f46', fontStyle: 'italic',
+                    fontSize: 12, color: '#3f3f46', fontStyle: 'italic',
                     fontFamily: '"IBM Plex Mono", monospace',
                   }}>decrypting…</span>
                 )}

@@ -2,8 +2,6 @@ import { useState, useEffect, Suspense, lazy, useRef } from 'react';
 import { MainLayout } from '@/components/layout/MainLayout';
 import type { ExpenseRecord } from '@/components/ledger/AddExpenseForm';
 import { useCrypto } from '@/context/CryptoContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -11,7 +9,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LogOut, ShieldCheck } from 'lucide-react';
+import { DownloadCloud, LogOut, ShieldCheck } from 'lucide-react';
 import { toast } from 'sonner';
 import { SUPPORTED_CURRENCIES, type SupportedCurrency } from '@/lib/currency';
 import { getDefaultCurrency } from '@/lib/preferences';
@@ -91,7 +89,7 @@ function VaultBadge({ label }: { label: string }) {
       padding: '4px 10px', borderRadius: 6,
       background: 'rgba(20,184,166,0.07)',
       border: '1px solid rgba(20,184,166,0.2)',
-      fontSize: 10, color: '#14b8a6', fontFamily: 'monospace',
+      fontSize: 11, color: '#14b8a6', fontFamily: 'monospace',
       letterSpacing: '0.06em',
     }}>
       <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#14b8a6', display: 'inline-block', boxShadow: '0 0 6px #14b8a6' }} />
@@ -129,7 +127,7 @@ function Panel({ children, style }: { children: React.ReactNode; style?: React.C
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 600, color: '#52525b',
+      fontSize: 11, fontWeight: 600, color: '#52525b',
       letterSpacing: '0.1em', textTransform: 'uppercase',
       fontFamily: 'monospace', marginBottom: 10,
       display: 'flex', alignItems: 'center', gap: 6,
@@ -149,7 +147,7 @@ export default function Dashboard() {
   const [customEnd, setCustomEnd] = useState('');
   const [selectedCurrency, setSelectedCurrency] = useState<SupportedCurrency>('LKR');
   const [mounted, setMounted] = useState(false);
-  const { token, logout, email } = useCrypto();
+  const { token, logout, email, decryptAmount } = useCrypto();
   const chartContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => { setTimeout(() => setMounted(true), 60); }, []);
@@ -210,8 +208,69 @@ export default function Dashboard() {
     }
   };
 
-  const getStartOfDay = (date: Date) => { const d = new Date(date); d.setHours(0, 0, 0, 0); return d; };
-  const getEndOfDay = (date: Date) => { const d = new Date(date); d.setHours(23, 59, 59, 999); return d; };
+  const handleCSVExport = async () => {
+    if (!token) return;
+    const loadToast = toast.loading('Fetching encrypted data...');
+    try {
+      const res = await fetch('http://localhost:8000/api/expenses', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) throw new Error(`Export fetch failed (${res.status})`);
+
+      const data = await res.json();
+      toast.loading(`Decrypting ${data.length} rows locally...`, { id: loadToast });
+
+      let csvContent = 'data:text/csv;charset=utf-8,ID,Date,Currency,Category,Description,DecryptedAmount\n';
+      data.forEach((exp: any) => {
+        let val = 0;
+        try { val = decryptAmount(exp.amountCiphertext); } catch { /* ignore row */ }
+        const row = [
+          exp.id,
+          exp.timestamp,
+          exp.currency || 'LKR',
+          exp.category,
+          `"${String(exp.description ?? '').replaceAll('"', '""')}"`,
+          val.toFixed(2),
+        ].join(',');
+        csvContent += `${row}\r\n`;
+      });
+
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement('a');
+      link.setAttribute('href', encodedUri);
+      link.setAttribute('download', 'cipherspend_decrypted_export.csv');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success('CSV Decrypted & Exported successfully!', { id: loadToast });
+    } catch (error) {
+      console.error(error);
+      toast.error('Export failed', { id: loadToast });
+    }
+  };
+
+  const getStartOfDay = (date: Date) => {
+    const d = new Date(date);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  };
+  const getEndOfDay = (date: Date) => {
+    const d = new Date(date);
+    d.setHours(23, 59, 59, 999);
+    return d;
+  };
+
+  const parseExpenseTimestamp = (timestamp: string): Date | null => {
+    const parsed = new Date(timestamp);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+
+    const normalized = timestamp.includes(' ') ? timestamp.replace(' ', 'T') : timestamp;
+    const fallback = new Date(normalized);
+    if (!Number.isNaN(fallback.getTime())) return fallback;
+
+    return null;
+  };
 
   const getDateRange = (): { start: Date | null; end: Date | null } => {
     const now = new Date();
@@ -234,10 +293,11 @@ export default function Dashboard() {
 
   const { start: rangeStart, end: rangeEnd } = getDateRange();
   const filteredExpenses = expenses.filter((expense) => {
-    const ts = new Date(expense.timestamp);
-    if (Number.isNaN(ts.getTime())) return false;
-    if (rangeStart && ts < rangeStart) return false;
-    if (rangeEnd && ts > rangeEnd) return false;
+    const ts = parseExpenseTimestamp(expense.timestamp);
+    if (!ts) return false;
+
+    if (rangeStart && ts.getTime() < rangeStart.getTime()) return false;
+    if (rangeEnd && ts.getTime() > rangeEnd.getTime()) return false;
     if ((expense.currency || 'LKR') !== selectedCurrency) return false;
     return true;
   });
@@ -281,14 +341,14 @@ export default function Dashboard() {
             <div>
               <VaultBadge label="VAULT ACTIVE" />
               <h2 style={{
-                fontSize: 26, fontWeight: 700, color: '#f4f4f5',
+                fontSize: 28, fontWeight: 700, color: '#f4f4f5',
                 margin: '10px 0 4px', letterSpacing: '-0.02em',
                 display: 'flex', alignItems: 'center', gap: 10,
               }}>
                 <ShieldCheck style={{ color: '#14b8a6', width: 22, height: 22 }} />
                 Encrypted Dashboard
               </h2>
-              <p style={{ fontSize: 12, color: '#52525b', fontFamily: 'monospace', margin: 0 }}>
+              <p style={{ fontSize: 13, color: '#52525b', fontFamily: 'monospace', margin: 0 }}>
                 Vault synced · <span style={{ color: '#3f3f46' }}>{email}</span>
               </p>
             </div>
@@ -305,13 +365,37 @@ export default function Dashboard() {
               </Suspense>
 
               <button
+                onClick={handleCSVExport}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '9px 16px', borderRadius: 9,
+                  background: 'rgba(20,184,166,0.08)',
+                  border: '1px solid rgba(20,184,166,0.22)',
+                  color: '#2dd4bf', fontSize: 14, fontWeight: 600,
+                  cursor: 'pointer', transition: 'all .2s',
+                  fontFamily: 'inherit',
+                }}
+                onMouseEnter={e => {
+                  e.currentTarget.style.background = 'rgba(20,184,166,0.14)';
+                  e.currentTarget.style.borderColor = 'rgba(20,184,166,0.35)';
+                }}
+                onMouseLeave={e => {
+                  e.currentTarget.style.background = 'rgba(20,184,166,0.08)';
+                  e.currentTarget.style.borderColor = 'rgba(20,184,166,0.22)';
+                }}
+              >
+                <DownloadCloud style={{ width: 14, height: 14 }} />
+                Export CSV
+              </button>
+
+              <button
                 onClick={logout}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 7,
                   padding: '9px 16px', borderRadius: 9,
                   background: 'rgba(255,255,255,0.02)',
                   border: '1px solid rgba(255,255,255,0.08)',
-                  color: '#71717a', fontSize: 13, fontWeight: 500,
+                  color: '#71717a', fontSize: 14, fontWeight: 500,
                   cursor: 'pointer', transition: 'all .2s',
                   fontFamily: 'inherit',
                 }}
@@ -351,21 +435,21 @@ export default function Dashboard() {
                 {/* Currency row */}
                 <div style={{ marginBottom: 14 }}>
                   <div style={{
-                    fontSize: 10, color: '#52525b', fontFamily: 'monospace',
+                    fontSize: 11, color: '#52525b', fontFamily: 'monospace',
                     letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 6,
                   }}>Currency</div>
                   <Select value={selectedCurrency} onValueChange={(v) => setSelectedCurrency(v as SupportedCurrency)}>
                     <SelectTrigger style={{
                       background: 'rgba(255,255,255,0.03)',
                       border: '1px solid rgba(255,255,255,0.09)',
-                      color: '#d4d4d8', fontSize: 13, borderRadius: 8,
+                      color: '#d4d4d8', fontSize: 14, borderRadius: 8,
                       fontFamily: 'monospace',
                     }}>
                       <SelectValue placeholder="Currency" />
                     </SelectTrigger>
                     <SelectContent style={{ background: '#0f1214', border: '1px solid rgba(255,255,255,0.08)', color: '#d4d4d8' }}>
                       {SUPPORTED_CURRENCIES.map((cur) => (
-                        <SelectItem key={cur} value={cur} style={{ fontFamily: 'monospace', fontSize: 13 }}>{cur}</SelectItem>
+                        <SelectItem key={cur} value={cur} style={{ fontFamily: 'monospace', fontSize: 14 }}>{cur}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -374,7 +458,7 @@ export default function Dashboard() {
                 {/* Range pills */}
                 <div style={{ marginBottom: 12 }}>
                   <div style={{
-                    fontSize: 10, color: '#52525b', fontFamily: 'monospace',
+                    fontSize: 11, color: '#52525b', fontFamily: 'monospace',
                     letterSpacing: '0.08em', textTransform: 'uppercase', marginBottom: 8,
                   }}>Filter Range</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
@@ -385,7 +469,7 @@ export default function Dashboard() {
                         style={{
                           padding: '6px 14px',
                           borderRadius: 7,
-                          fontSize: 12, fontWeight: 600,
+                          fontSize: 13, fontWeight: 600,
                           fontFamily: 'monospace',
                           cursor: 'pointer',
                           border: filterRange === value
@@ -415,7 +499,7 @@ export default function Dashboard() {
                         value={props.value}
                         onChange={e => props.onChange(e.target.value)}
                         style={{
-                          padding: '8px 10px', borderRadius: 7, fontSize: 12,
+                          padding: '8px 10px', borderRadius: 7, fontSize: 13,
                           background: 'rgba(255,255,255,0.03)',
                           border: '1px solid rgba(255,255,255,0.09)',
                           color: '#d4d4d8', fontFamily: 'monospace', outline: 'none',
@@ -456,7 +540,7 @@ export default function Dashboard() {
             }}>
               <div>
                 <SectionLabel>Secure Ledger</SectionLabel>
-                <h3 style={{ fontSize: 15, fontWeight: 600, color: '#e4e4e7', margin: 0, letterSpacing: '-0.01em' }}>
+                <h3 style={{ fontSize: 17, fontWeight: 600, color: '#e4e4e7', margin: 0, letterSpacing: '-0.01em' }}>
                   Transaction Records
                 </h3>
               </div>
@@ -464,7 +548,7 @@ export default function Dashboard() {
                 padding: '4px 10px', borderRadius: 20,
                 background: 'rgba(20,184,166,0.06)',
                 border: '1px solid rgba(20,184,166,0.15)',
-                fontSize: 11, color: '#14b8a6', fontFamily: 'monospace',
+                fontSize: 12, color: '#14b8a6', fontFamily: 'monospace',
               }}>
                 {filteredExpenses.length} records
               </div>
@@ -483,7 +567,7 @@ export default function Dashboard() {
             marginTop: 24, padding: '10px 14px',
             background: 'rgba(245,158,11,0.03)',
             border: '1px solid rgba(245,158,11,0.1)',
-            borderRadius: 8, fontSize: 11, color: '#57534e',
+            borderRadius: 8, fontSize: 12, color: '#57534e',
             fontFamily: 'monospace', lineHeight: 1.6,
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
