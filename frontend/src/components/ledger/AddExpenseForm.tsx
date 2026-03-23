@@ -25,7 +25,7 @@ const inputStyle = (focused: boolean): React.CSSProperties => ({
   border: `1px solid ${focused ? 'rgba(20,184,166,0.55)' : 'rgba(255,255,255,0.09)'}`,
   borderRadius: 8,
   color: '#f4f4f5',
-  fontSize: 13,
+  fontSize: 14,
   fontFamily: '"IBM Plex Mono", monospace',
   outline: 'none',
   transition: 'border-color .2s, box-shadow .2s',
@@ -40,7 +40,7 @@ const selectStyle: React.CSSProperties = {
   border: '1px solid rgba(255,255,255,0.09)',
   borderRadius: 8,
   color: '#f4f4f5',
-  fontSize: 13,
+  fontSize: 14,
   fontFamily: '"IBM Plex Mono", monospace',
   outline: 'none',
   cursor: 'pointer',
@@ -52,7 +52,7 @@ const selectStyle: React.CSSProperties = {
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
-  fontSize: 10,
+  fontSize: 11,
   fontWeight: 700,
   color: '#52525b',
   letterSpacing: '0.09em',
@@ -207,7 +207,7 @@ export const AddExpenseForm: React.FC<{
           padding: '9px 16px', borderRadius: 9,
           background: '#0d9488',
           border: '1px solid rgba(20,184,166,0.4)',
-          color: '#fff', fontSize: 13, fontWeight: 700,
+          color: '#fff', fontSize: 14, fontWeight: 700,
           cursor: 'pointer', letterSpacing: '-0.01em',
           boxShadow: '0 0 18px rgba(20,184,166,0.2)',
           transition: 'background .2s',
@@ -226,14 +226,19 @@ export const AddExpenseForm: React.FC<{
           <Backdrop onClick={close} />
 
           <div style={{
-            position: 'fixed', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
+            position: 'fixed', inset: 0,
             zIndex: 101,
-            width: '100%', maxWidth: 460,
-            padding: '0 16px',
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'center',
+            width: '100%',
+            padding: '56px 16px 24px',
+            overflowY: 'auto',
             animation: 'slideUp .2s ease',
           }}>
             <div style={{
+              width: '100%',
+              maxWidth: 460,
               background: '#0c0e10',
               border: '1px solid rgba(255,255,255,0.09)',
               borderRadius: 16,
@@ -269,7 +274,7 @@ export const AddExpenseForm: React.FC<{
                   <div>
                     {/* mini section label */}
                     <div style={{
-                      fontSize: 9, fontWeight: 700, color: '#3f3f46',
+                      fontSize: 10, fontWeight: 700, color: '#3f3f46',
                       letterSpacing: '0.09em', textTransform: 'uppercase',
                       fontFamily: '"IBM Plex Mono", monospace', marginBottom: 3,
                       display: 'flex', alignItems: 'center', gap: 5,
@@ -277,7 +282,7 @@ export const AddExpenseForm: React.FC<{
                       <span style={{ width: 12, height: 1, background: 'rgba(20,184,166,0.4)', display: 'inline-block' }} />
                       {editExpense ? 'Edit Entry' : 'New Entry'}
                     </div>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
+                    <div style={{ fontSize: 16, fontWeight: 700, color: '#f4f4f5', letterSpacing: '-0.01em' }}>
                       Secure {editExpense ? 'Update' : 'Expense'}
                     </div>
                   </div>
@@ -303,7 +308,7 @@ export const AddExpenseForm: React.FC<{
               {/* Description subtitle */}
               <div style={{
                 padding: '10px 22px 0',
-                fontSize: 11, color: '#52525b',
+                fontSize: 12, color: '#52525b',
                 fontFamily: '"IBM Plex Mono", monospace',
               }}>
                 {editExpense
@@ -360,7 +365,7 @@ export const AddExpenseForm: React.FC<{
                         onFocus={() => setFocused('newcat')}
                         onBlur={() => setFocused(null)}
                         placeholder="Add category…"
-                        style={{ ...inputStyle(focused === 'newcat'), padding: '7px 10px', fontSize: 11 }}
+                        style={{ ...inputStyle(focused === 'newcat'), padding: '7px 10px', fontSize: 12 }}
                       />
                       <button
                         type="button"
@@ -369,7 +374,7 @@ export const AddExpenseForm: React.FC<{
                           padding: '7px 12px', borderRadius: 7, flexShrink: 0,
                           background: 'rgba(20,184,166,0.08)',
                           border: '1px solid rgba(20,184,166,0.2)',
-                          color: '#14b8a6', fontSize: 11, fontWeight: 600,
+                          color: '#14b8a6', fontSize: 12, fontWeight: 600,
                           cursor: 'pointer', transition: 'background .15s',
                           fontFamily: '"IBM Plex Mono", monospace',
                         }}
@@ -408,7 +413,7 @@ export const AddExpenseForm: React.FC<{
                     <span style={{
                       position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)',
                       color: '#14b8a6', fontFamily: '"IBM Plex Mono", monospace',
-                      fontSize: 14, fontWeight: 700, pointerEvents: 'none',
+                      fontSize: 15, fontWeight: 700, pointerEvents: 'none',
                     }}>{sym}</span>
                     <input
                       type="number"
@@ -419,7 +424,7 @@ export const AddExpenseForm: React.FC<{
                       onBlur={() => setFocused(null)}
                       placeholder="0.00"
                       required
-                      style={{ ...inputStyle(focused === 'amount'), paddingLeft: 34 }}
+                      style={{ ...inputStyle(focused === 'amount'), paddingLeft: 44 }}
                     />
                   </div>
                 </div>
@@ -435,7 +440,7 @@ export const AddExpenseForm: React.FC<{
                     <path d="M5 7V5a3 3 0 0 1 6 0v2" stroke="#14b8a6" strokeWidth="1.4" strokeLinecap="round" />
                     <rect x="2" y="7" width="12" height="8" rx="2.5" fill="#14b8a6" opacity=".25" />
                   </svg>
-                  <span style={{ fontSize: 10, color: '#3f3f46', fontFamily: '"IBM Plex Mono", monospace', lineHeight: 1.5 }}>
+                  <span style={{ fontSize: 11, color: '#3f3f46', fontFamily: '"IBM Plex Mono", monospace', lineHeight: 1.5 }}>
                     Amount will be CKKS-encrypted via WASM before leaving your device
                   </span>
                 </div>
@@ -451,7 +456,7 @@ export const AddExpenseForm: React.FC<{
                         padding: '11px', borderRadius: 9,
                         background: 'rgba(255,255,255,0.02)',
                         border: '1px solid rgba(255,255,255,0.09)',
-                        color: '#71717a', fontSize: 13, fontWeight: 500,
+                        color: '#71717a', fontSize: 14, fontWeight: 500,
                         cursor: 'pointer', transition: 'all .15s',
                         fontFamily: 'inherit',
                       }}
@@ -468,7 +473,7 @@ export const AddExpenseForm: React.FC<{
                       borderRadius: 9,
                       background: (!isCryptoReady || isSubmitting) ? 'rgba(20,184,166,0.25)' : '#0d9488',
                       border: '1px solid rgba(20,184,166,0.4)',
-                      color: '#fff', fontSize: 14, fontWeight: 700,
+                      color: '#fff', fontSize: 15, fontWeight: 700,
                       cursor: (!isCryptoReady || isSubmitting) ? 'not-allowed' : 'pointer',
                       letterSpacing: '-0.01em',
                       boxShadow: (!isCryptoReady || isSubmitting) ? 'none' : '0 0 20px rgba(20,184,166,0.2)',
@@ -509,8 +514,8 @@ export const AddExpenseForm: React.FC<{
 
       <style>{`
         @keyframes fadeIn  { from { opacity: 0; }                    to { opacity: 1; } }
-        @keyframes slideUp { from { opacity: 0; transform: translate(-50%, calc(-50% + 14px)); }
-                             to   { opacity: 1; transform: translate(-50%, -50%); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(14px); }
+                             to   { opacity: 1; transform: translateY(0); } }
         @keyframes spin    { to   { transform: rotate(360deg); } }
       `}</style>
     </>

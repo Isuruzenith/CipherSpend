@@ -71,7 +71,7 @@ function VaultBadge({ label }: { label: string }) {
       padding: '5px 12px', borderRadius: 999,
       background: 'rgba(20,184,166,0.07)',
       border: '1px solid rgba(20,184,166,0.22)',
-      fontSize: 11, color: '#14b8a6',
+      fontSize: 12, color: '#14b8a6',
       fontFamily: '"IBM Plex Mono", monospace',
       letterSpacing: '0.07em', fontWeight: 600,
     }}>
@@ -110,7 +110,7 @@ function Panel({ children, style }: {
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
-      fontSize: 10, fontWeight: 700, color: '#14b8a6',
+      fontSize: 11, fontWeight: 700, color: '#14b8a6',
       letterSpacing: '0.1em', textTransform: 'uppercase',
       fontFamily: '"IBM Plex Mono", monospace', marginBottom: 12,
       display: 'flex', alignItems: 'center', gap: 8,
@@ -275,7 +275,7 @@ function StepExplainer() {
             border: 'none',
             borderBottom: i === active ? `2px solid ${st.color}` : '2px solid transparent',
             color: i === active ? '#f4f4f5' : '#52525b',
-            fontSize: 11, fontWeight: i === active ? 700 : 400,
+            fontSize: 12, fontWeight: i === active ? 700 : 400,
             fontFamily: '"IBM Plex Mono", monospace',
             letterSpacing: '0.06em', textTransform: 'uppercase',
             cursor: 'pointer', transition: 'all .2s',
@@ -300,17 +300,17 @@ function StepExplainer() {
           display: 'inline-flex', alignItems: 'center', gap: 6,
           padding: '3px 10px', borderRadius: 6,
           background: s.bg, border: `1px solid ${s.border}`,
-          fontSize: 10, color: s.color,
+          fontSize: 11, color: s.color,
           fontFamily: '"IBM Plex Mono", monospace',
           letterSpacing: '0.06em', marginBottom: 12,
         }}>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: s.color, display: 'inline-block' }} />
           STEP {active + 1} OF 3
         </div>
-        <h3 style={{ margin: '0 0 10px', fontSize: 20, fontWeight: 700, color: s.color, letterSpacing: '-0.01em' }}>
+        <h3 style={{ margin: '0 0 10px', fontSize: 22, fontWeight: 700, color: s.color, letterSpacing: '-0.01em' }}>
           {s.title}
         </h3>
-        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.8, color: '#71717a', maxWidth: 560 }}>
+        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.8, color: '#71717a', maxWidth: 560 }}>
           {s.body}
         </p>
       </div>
@@ -463,7 +463,7 @@ export default function Landing() {
           </h1>
 
           <p style={{
-            fontSize: 'clamp(14px,2vw,18px)', color: '#52525b',
+            fontSize: 'clamp(16px,2vw,20px)', color: '#52525b',
             lineHeight: 1.75, maxWidth: 520, margin: '0 auto 44px',
           }}>
             CipherSpend tracks your finances using homomorphic encryption — the server
@@ -474,7 +474,7 @@ export default function Landing() {
             <Link to="/signup">
               <button style={{
                 padding: '14px 32px', borderRadius: 10, border: 'none',
-                background: '#0d9488', color: '#fff', fontSize: 15, fontWeight: 700,
+                background: '#0d9488', color: '#fff', fontSize: 16, fontWeight: 700,
                 cursor: 'pointer', letterSpacing: '-0.01em',
                 boxShadow: '0 0 28px rgba(20,184,166,0.28)',
                 transition: 'background .2s, transform .1s', fontFamily: 'inherit',
@@ -498,7 +498,7 @@ export default function Landing() {
                 padding: '14px 32px', borderRadius: 10,
                 border: '1px solid rgba(255,255,255,0.09)',
                 background: 'rgba(255,255,255,0.03)',
-                color: '#a1a1aa', fontSize: 15, cursor: 'pointer', fontFamily: 'inherit',
+                color: '#a1a1aa', fontSize: 16, cursor: 'pointer', fontFamily: 'inherit',
                 transition: 'all .2s',
               }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor = 'rgba(255,255,255,0.18)'; e.currentTarget.style.color = '#f4f4f5'; }}
@@ -530,7 +530,7 @@ export default function Landing() {
                 <path d="M6 16l8 0M10 16v2" stroke="#14b8a6" strokeWidth="1.2" strokeLinecap="round" />
               </svg>
             </div>
-            <span style={{ fontSize: 9, color: '#3f3f46', letterSpacing: '0.07em', fontFamily: 'monospace' }}>BROWSER</span>
+              <span style={{ fontSize: 10, color: '#3f3f46', letterSpacing: '0.07em', fontFamily: 'monospace' }}>BROWSER</span>
           </div>
 
           {/* Server node */}
@@ -549,7 +549,7 @@ export default function Landing() {
                 <path d="M6 7h8M6 10h5M6 13h6" stroke="#8b5cf6" strokeWidth="1" strokeLinecap="round" opacity=".6" />
               </svg>
             </div>
-            <span style={{ fontSize: 9, color: '#3f3f46', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SERVER</span>
+              <span style={{ fontSize: 10, color: '#3f3f46', letterSpacing: '0.07em', fontFamily: 'monospace' }}>SERVER</span>
           </div>
 
           <div style={{ position: 'absolute', inset: '0 58px' }}>
@@ -558,12 +558,12 @@ export default function Landing() {
 
           <div style={{
             position: 'absolute', top: '12%', left: '50%', transform: 'translateX(-50%)',
-            fontSize: 10, color: '#14b8a6', fontFamily: '"IBM Plex Mono", monospace',
+            fontSize: 11, color: '#14b8a6', fontFamily: '"IBM Plex Mono", monospace',
             letterSpacing: '0.04em', pointerEvents: 'none', whiteSpace: 'nowrap',
           }}>⟨ciphertext⟩</div>
           <div style={{
             position: 'absolute', bottom: '12%', left: '50%', transform: 'translateX(-50%)',
-            fontSize: 10, color: '#8b5cf6', fontFamily: '"IBM Plex Mono", monospace',
+            fontSize: 11, color: '#8b5cf6', fontFamily: '"IBM Plex Mono", monospace',
             letterSpacing: '0.04em', pointerEvents: 'none', whiteSpace: 'nowrap',
           }}>⟨encrypted sum⟩</div>
         </div>
@@ -580,7 +580,7 @@ export default function Landing() {
               <animate attributeName="cy" values="8;14;8" dur="1.8s" repeatCount="indefinite" />
             </circle>
           </svg>
-          <span style={{ fontSize: 9, color: '#52525b', letterSpacing: '0.08em', fontFamily: 'monospace' }}>SCROLL</span>
+          <span style={{ fontSize: 10, color: '#52525b', letterSpacing: '0.08em', fontFamily: 'monospace' }}>SCROLL</span>
         </div>
       </section>
 
@@ -606,7 +606,7 @@ export default function Landing() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#14b8a6', display: 'inline-block' }} />
               <span style={{
-                fontSize: 10, fontWeight: 700, color: '#52525b',
+                fontSize: 11, fontWeight: 700, color: '#52525b',
                 letterSpacing: '0.08em', textTransform: 'uppercase',
                 fontFamily: '"IBM Plex Mono", monospace',
               }}>FHE arithmetic trace</span>
@@ -618,7 +618,7 @@ export default function Landing() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#8b5cf6', display: 'inline-block' }} />
               <span style={{
-                fontSize: 10, fontWeight: 700, color: '#52525b',
+                fontSize: 11, fontWeight: 700, color: '#52525b',
                 letterSpacing: '0.08em', textTransform: 'uppercase',
                 fontFamily: '"IBM Plex Mono", monospace',
               }}>Trust boundary</span>
@@ -662,11 +662,11 @@ export default function Landing() {
               }}
             >
               <div style={{ fontSize: 22, marginBottom: 10 }}>{f.icon}</div>
-              <p style={{ fontSize: 13, fontWeight: 600, color: '#e4e4e7', margin: '0 0 4px', letterSpacing: '-0.01em' }}>
+              <p style={{ fontSize: 14, fontWeight: 600, color: '#e4e4e7', margin: '0 0 4px', letterSpacing: '-0.01em' }}>
                 {f.title}
               </p>
               <p style={{
-                fontSize: 11, color: '#3f3f46', margin: 0, lineHeight: 1.65,
+                fontSize: 12, color: '#3f3f46', margin: 0, lineHeight: 1.65,
                 fontFamily: '"IBM Plex Mono", monospace',
               }}>{f.sub}</p>
             </div>
@@ -698,7 +698,7 @@ export default function Landing() {
             Ready to take back your financial privacy?
           </h2>
           <p style={{
-            fontSize: 14, color: '#52525b', marginBottom: 36,
+            fontSize: 15, color: '#52525b', marginBottom: 36,
             maxWidth: 400, margin: '0 auto 36px', lineHeight: 1.75,
           }}>
             Your key never touches our servers. Your amounts never leave your device unencrypted.
@@ -724,7 +724,7 @@ export default function Landing() {
       <footer style={{
         borderTop: '1px solid rgba(255,255,255,0.05)',
         padding: '20px 24px', textAlign: 'center',
-        fontSize: 11, color: '#3f3f46',
+        fontSize: 12, color: '#3f3f46',
         fontFamily: '"IBM Plex Mono", monospace',
         letterSpacing: '0.04em', position: 'relative', zIndex: 1,
       }}>
@@ -736,7 +736,7 @@ export default function Landing() {
         margin: '0 24px 24px', padding: '10px 14px',
         background: 'rgba(245,158,11,0.03)',
         border: '1px solid rgba(245,158,11,0.1)',
-        borderRadius: 8, fontSize: 11, color: '#57534e',
+        borderRadius: 8, fontSize: 12, color: '#57534e',
         fontFamily: '"IBM Plex Mono", monospace', lineHeight: 1.6,
         display: 'flex', alignItems: 'center', gap: 8,
         maxWidth: 860, marginLeft: 'auto', marginRight: 'auto',
