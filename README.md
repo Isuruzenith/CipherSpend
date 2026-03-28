@@ -1,122 +1,113 @@
 # CipherSpend
 
-🌐 **Live Demo:** https://cipherspend.netlify.app/
+**A privacy-first expense tracker that encrypts monetary values in the browser before any data reaches the server.**
 
-CipherSpend is a privacy-first expense tracker that encrypts monetary values in the browser before sending data to the backend.
+🌐 [Live Demo](https://cipherspend.netlify.app/)
 
-## Homomorphic Encryption (HE) in CipherSpend
+---
 
-CipherSpend uses **CKKS homomorphic encryption** (via Microsoft SEAL bindings) so the server can perform math on encrypted values without seeing raw amounts.
+## How it works
 
-### Why HE is used
+CipherSpend divides the world into two zones separated by a strict trust boundary.
 
-- Protects sensitive spending amounts from backend/database operators
-- Enables encrypted aggregation (for totals/category sums) without decrypting on the server
-- Keeps user-visible decryption in the client vault session
+**The browser is the only trusted party.** It generates encryption keys, encrypts expense amounts before upload, and decrypts ciphertext locally for display. Plaintext amounts never leave the device.
 
-### Trust boundary
+**The backend is untrusted for plaintext.** It stores ciphertext blobs, runs homomorphic aggregation (summing ciphertexts without decrypting them), and returns encrypted results. It never requires raw amounts to perform analytics.
+<img width="1360" height="1560" alt="svgviewer-png-output" src="https://github.com/user-attachments/assets/ade79e69-3b86-4265-b957-9a7f80013f8e" />
 
-- **Browser (trusted by user):**
-  - Generates keys
-  - Encrypts amounts before upload
-  - Decrypts values for display (total, chart, ledger)
-- **Backend (untrusted for plaintext amounts):**
-  - Stores ciphertext
-  - Performs ciphertext aggregation
-  - Never requires plaintext amounts for core analytics flow
 
-### Crypto flow (practical)
+### Crypto flow
 
-1. User registers/unlocks with passphrase.
-2. Browser initializes SEAL context and key material.
-3. Expense amount is encrypted client-side and uploaded as base64 ciphertext.
-4. Backend persists ciphertext and can sum ciphertext values homomorphically.
-5. Browser decrypts returned/row ciphertext for UI rendering.
+1. User registers or unlocks with a passphrase.
+2. Browser derives an AES-GCM wrapping key from the passphrase via PBKDF2, then initializes a SEAL context and generates CKKS key material (public key + secret key).
+3. The secret key is wrapped (encrypted) with the AES-GCM key and sent to the backend as an opaque blob — the backend stores only the wrapped form and never learns the passphrase.
+4. When the user adds an expense, the amount is encrypted client-side and uploaded as a base64 ciphertext alongside plaintext metadata (date, category, description).
+5. The backend stores ciphertext and can sum ciphertext values homomorphically using TenSEAL without decrypting them.
+6. The browser downloads ciphertext rows or aggregate ciphertext, decrypts them locally, and renders totals, charts, and the ledger.
 
-### Key handling model
+### CKKS parameters
 
-- Secret key is wrapped (encrypted) client-side using a passphrase-derived key (PBKDF2 + AES-GCM).
-- Backend stores wrapped key blob, not plaintext secret key.
-- Passphrase is not recoverable by backend.
+| Parameter | Value |
+|---|---|
+| Scheme | CKKS |
+| Poly modulus degree | 8192 |
+| Coeff mod bit sizes | `[60, 40, 40, 60]` |
+| Scale | 2^40 |
 
-### CKKS details used currently
+CKKS uses approximate arithmetic, which is ideal for numeric analytics like totals and per-category spending.
 
-- Scheme: `CKKS`
-- Poly modulus degree: `8192`
-- Coeff mod bit sizes: `[60, 40, 40, 60]`
-- Scale: `2^40`
+### Key handling
 
-CKKS is approximate arithmetic, which is ideal for numeric analytics like totals and category spending.
+- The secret key is wrapped client-side with a passphrase-derived key (PBKDF2 + AES-GCM).
+- The backend stores only the wrapped blob — it cannot recover the passphrase or the secret key.
+- Decryption happens entirely in the browser during an active vault session.
 
 ### Security assumptions and limitations
 
-- If client/browser is compromised at runtime, displayed plaintext can be exposed.
-- HE protects data at rest/in transit to server, not against malware on user device.
-- Current app does not perform FX conversion; totals should be interpreted per selected currency.
-- Timestamp/description/category are not HE-encrypted amounts and may still reveal metadata patterns.
+- If the browser is compromised at runtime, displayed plaintext is exposed. HE protects data at rest and in transit to the server, not against malware on the user's device.
+- Timestamp, description, and category are not HE-encrypted and may still reveal metadata patterns.
+- The app does not perform FX conversion; totals are interpreted per the selected currency.
+- The frontend includes local aggregation and decryption paths so the dashboard stays usable even if server-side HE interop fails in specific runtime environments.
 
-### Operational note
+---
 
-The frontend includes robust local aggregation/decryption paths so dashboard totals/charts stay usable even if server-side aggregate ciphertext interop fails in specific runtime combinations.
+## Features
 
-## Key Features
-
-- Client-side encryption for expense amounts (`node-seal` / WASM)
-- FastAPI backend with encrypted expense storage
-- Dashboard with decrypted total and category analytics (locally decrypted)
+- Client-side CKKS encryption for expense amounts via `node-seal` (WASM)
+- Homomorphic aggregation on the backend with TenSEAL
+- Dashboard with decrypted totals and per-category analytics (locally decrypted)
 - Date filters: day, week, month, custom range
-- Multi-currency support (default: `LKR`)
-- Expense CRUD (add, edit, delete)
-- Vault settings (key rotation, backup, default currency, CSV export)
+- Multi-currency support (default: LKR)
+- Full expense CRUD: add, edit, delete
+- Vault settings: key rotation, backup, default currency, CSV export
 
-## Tech Stack
+---
 
-- Frontend: React, TypeScript, Vite, Tailwind, shadcn/ui, Recharts
-- Backend: FastAPI, SQLAlchemy, SQLite, TenSEAL
-- Containerization: Docker + Docker Compose
+## Tech stack
 
-## Project Structure
+**Frontend** — React, TypeScript, Vite, Tailwind CSS, shadcn/ui, Recharts, node-seal (WASM)
 
-```text
-backend/    FastAPI app, DB models, schemas
-frontend/   React app and UI components
-```
+**Backend** — FastAPI, SQLAlchemy, SQLite, TenSEAL
 
-## Run with Docker (Recommended)
+**Infrastructure** — Docker, Docker Compose, Nginx (SPA fallback)
 
-From repository root:
+---
+
+## Running locally
+
+### Docker (recommended)
 
 ```bash
 docker compose up --build
 ```
 
-App URLs:
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:8000 |
 
-- Frontend: `http://localhost:5173`
-- Backend API: `http://localhost:8000`
-
-### Common Docker Commands
+Useful commands:
 
 ```bash
-docker compose up -d
-docker compose logs -f backend
-docker compose logs -f frontend
-docker compose down
+docker compose up -d                        # run detached
+docker compose logs -f backend              # stream backend logs
+docker compose logs -f frontend             # stream frontend logs
+docker compose down                         # stop all services
 ```
 
-## Local Development
+### Manual setup
 
-### Backend
+**Backend:**
 
 ```bash
 cd backend
 python -m venv venv
-venv\Scripts\activate
+venv\Scripts\activate        # Windows; use source venv/bin/activate on macOS/Linux
 pip install -r requirements.txt
 uvicorn main:app --reload --port 8000
 ```
 
-### Frontend
+**Frontend:**
 
 ```bash
 cd frontend
@@ -124,25 +115,34 @@ npm install
 npm run dev
 ```
 
-## Environment Notes
+The frontend reads the backend base URL from `frontend/.env` (`VITE_BACKEND_API_URL`) and defaults to `http://localhost:8000` if unset.
 
-- The frontend reads backend base URL from `frontend/.env` (`VITE_BACKEND_API_URL`) and defaults to `http://localhost:8000` if unset.
-- For production-like static serving, Nginx SPA fallback is configured so routes like `/dashboard` and `/settings` work on refresh.
-- `seal_throws.wasm` and related public assets are served from `frontend/public`.
+---
+
+## Project structure
+
+```
+backend/     FastAPI app, DB models, schemas, TenSEAL HE logic
+frontend/    React app, UI components, node-seal WASM crypto
+```
+
+The `seal_throws.wasm` and related public assets are served from `frontend/public`. Nginx is configured with an SPA fallback so routes like `/dashboard` and `/settings` work on hard refresh.
+
+---
 
 ## Troubleshooting
 
-- If backend fails with missing modules, rebuild backend image:
+**Backend fails with missing modules** — rebuild the backend image:
 
 ```bash
 docker compose build backend --no-cache
 docker compose up -d backend
 ```
 
-- If frontend shows stale assets, rebuild frontend and hard refresh browser (`Ctrl + F5`):
+**Frontend shows stale assets** — rebuild and hard refresh:
 
 ```bash
 docker compose build frontend --no-cache
 docker compose up -d frontend
+# Then Ctrl+F5 in the browser
 ```
-
