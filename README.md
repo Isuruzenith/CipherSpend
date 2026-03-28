@@ -1,5 +1,7 @@
 # CipherSpend
 
+🌐 **Live Demo:** https://cipherspend.netlify.app/
+
 CipherSpend is a privacy-first expense tracker that encrypts monetary values in the browser before sending data to the backend.
 
 ## Homomorphic Encryption (HE) in CipherSpend
